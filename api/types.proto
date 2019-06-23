@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package info_age.bremote;
+
+option go_package="api";
+//option php_namespace="mediaserver";
+option java_package = "net.info-age.bremote.server";
+
+message String {
+    string value = 1;
+}
+
+message Boolean {
+    bool value = 1;
+}
+
+enum ProxySessionType {
+    Undefined = 0;
+    Client = 1;
+    Command = 2;
+}
