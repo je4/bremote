@@ -35,6 +35,16 @@ func (pss ProxyServiceServer) Init(ctx context.Context, param *pb.InitParam) (*e
 		return nil, status.Errorf(codes.OutOfRange, fmt.Sprintf("cannot rename %v to %v: %v", instance, param.GetInstance().GetValue(), err))
 	}
 
+	switch param.SessionType {
+	case pb.ProxySessionType_Undefined:
+		pss.proxySession.SetSessionType(SessionType_Undefined)
+	case pb.ProxySessionType_Client:
+		pss.proxySession.SetSessionType(SessionType_Client)
+	case pb.ProxySessionType_Command:
+		pss.proxySession.SetSessionType(SessionType_Command)
+	default:
+		return nil, status.Errorf(codes.OutOfRange, fmt.Sprintf("invalid sessiontype %v", param.SessionType))
+	}
 
 	return new(empty.Empty), nil
 }

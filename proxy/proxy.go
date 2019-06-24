@@ -6,8 +6,6 @@ import (
 	"github.com/goph/emperror"
 	"github.com/hashicorp/yamux"
 	"github.com/op/go-logging"
-	"google.golang.org/grpc"
-	pb "info_age.net/bremote/api"
 	"sync"
 )
 
@@ -75,10 +73,11 @@ func (proxy *Proxy) GetSession(name string) (*ProxySession, error) {
 
 func (proxy *Proxy) CloseSession(name string) error {
 	proxy.log.Debugf("close session %v", name)
-	_, err := proxy.RemoveSession(name)
+	session, err := proxy.GetSession(name)
 	if err != nil {
 		return emperror.Wrapf(err, "error removing session %v", name)
 	}
+	session.Close()
 	return nil
 }
 
@@ -137,30 +136,23 @@ func (proxy *Proxy) ListenServe() (err error) {
 		}
 
 		proxy.log.Info("launching a gRPC server over incoming TCP connection")
-		go proxy.ServeGRPC(session)
+		go proxy.Serve(session)
 	}
 	return
 }
 
-func (proxy *Proxy) ServeGRPC(session *yamux.Session) error {
+func (proxy *Proxy) Serve(session *yamux.Session) error {
 	// create a server instance
 	instancename := session.RemoteAddr().String()
-	defer proxy.CloseSession(instancename)
 
-	ps := NewProxySession(instancename, proxy, proxy.log)
+	ps := NewProxySession(instancename, session, proxy, proxy.log)
+	defer func() {
+		if err := ps.Close(); err != nil {
+			proxy.log.Errorf("error closing proxy session %v: %v", ps.GetInstance(), err)
+		}
+	}()
 
-	// create a gRPC server object
-	grpcServer := grpc.NewServer()
-
-	// attach the Ping service to the server
-	pb.RegisterProxyServiceServer(grpcServer, ps.service)
-
-	// start the gRPC erver
-	proxy.log.Info("launching gRPC server over TLS connection...")
-	if err := grpcServer.Serve(session); err != nil {
-		return emperror.Wrapf(err, "failed to serve")
-	}
-	return nil
+	return ps.Serve()
 }
 
 func (proxy *Proxy) Close() error {

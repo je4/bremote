@@ -69,8 +69,8 @@ func (client *Client) InitProxy() error {
 		return errors.New("cannot dial grpc connection to :7777")
 	}
 	proxy := pb.NewProxyServiceClient(conn)
-	str := new(pb.String)
-	str.Value = client.instance
+	str := &pb.InitParam{Instance:&pb.String{Value:client.instance},
+		SessionType:pb.ProxySessionType_Client}
 	_, err = proxy.Init(context.Background(), str)
 	if err != nil {
 		return emperror.Wrap(err, "cannot initialize client")
