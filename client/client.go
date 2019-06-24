@@ -5,12 +5,16 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"github.com/goph/emperror"
 	"github.com/hashicorp/yamux"
 	"github.com/op/go-logging"
 	"google.golang.org/grpc"
 	pb "info_age.net/bremote/api"
+	"log"
 	"net"
+	"sync"
+	"time"
 )
 
 type Client struct {
@@ -19,10 +23,11 @@ type Client struct {
 	conn       *tls.Conn
 	session    *yamux.Session
 	grpcServer *grpc.Server
+	end chan bool
 }
 
 func NewClient(instance string, log *logging.Logger) *Client {
-	client := &Client{log: log, instance:instance}
+	client := &Client{log: log, instance:instance, end:make(chan bool, 1)}
 	return client
 }
 
@@ -57,11 +62,62 @@ func (client *Client) Connect() (err error) {
 	return
 }
 
+func (client *Client) Serve() error {
+	waitTime := time.Second
+
+	for {
+		var wg sync.WaitGroup
+
+
+		if err := client.Connect(); err != nil {
+			client.log.Errorf("cannot connect client %v", err)
+			waitTime += time.Second
+			if waitTime > time.Second*10 {
+				waitTime = time.Second*10
+			}
+		} else {
+			waitTime = time.Second
+
+			wg.Add(1)
+
+			go func() {
+				if err := client.ServeGRPC(); err != nil {
+					client.log.Errorf("error serving GRPC: %v", err)
+				}
+				wg.Done()
+			}()
+
+			go func() {
+				time.Sleep(time.Second * 1)
+				if err := client.InitProxy(); err != nil {
+					log.Panicf("cannot initialize proxy: %+v", err)
+					client.Close()
+				}
+			}()
+		}
+		wg.Wait()
+		client.Close()
+		client.log.Infof("sleeping %v seconds...", waitTime.Seconds())
+		// wait 10 seconds or finish if needed
+		select {
+		case <- time.After(waitTime):
+		case <- client.end:
+			client.log.Info("shutting down")
+			return nil
+		}
+		//time.Sleep(time.Second*10)
+	}
+	return nil
+}
+
 func (client *Client) InitProxy() error {
 
 	// gRPC dial over incoming net.Conn
 	conn, err := grpc.Dial(":7777", grpc.WithInsecure(),
 		grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
+			if client.session == nil {
+				return nil, errors.New(fmt.Sprintf("session %s closed", s))
+			}
 			return client.session.Open()
 		}),
 	)
@@ -97,8 +153,26 @@ func (client *Client) ServeGRPC() error {
 }
 
 func (client *Client) Close() error {
-	client.grpcServer.GracefulStop()
-	client.session.Close()
-	client.conn.Close()
+	if client.grpcServer != nil {
+		client.grpcServer.GracefulStop()
+		client.grpcServer = nil
+	}
+
+	if client.session != nil {
+		client.session.Close()
+		client.session = nil
+	}
+
+	if client.conn != nil {
+		client.conn.Close()
+		client.conn = nil
+	}
+
 	return nil
+}
+
+func (client *Client) Shutdown() error {
+	err := client.Close()
+	client.end <- true
+	return err
 }

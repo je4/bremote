@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 )
 
 // static address to enable zero config distribution
@@ -61,10 +60,6 @@ func main() {
 
 	client := NewClient(*instanceName, log)
 
-	if err := client.Connect(); err != nil {
-		log.Panicf("cannot create client %+v", err)
-	}
-
 	go func() {
 		sigint := make(chan os.Signal, 1)
 
@@ -78,17 +73,11 @@ func main() {
 
 		// We received an interrupt signal, shut down.
 		log.Infof("shutdown requested")
-		client.Close()
+		client.Shutdown()
 	}()
 
-	go func() {
-		time.Sleep(time.Second * 1)
-		if err := client.InitProxy(); err != nil {
-			log.Panicf("cannot initialize proxy: %+v", err)
-		}
-	}()
-
-	if err := client.ServeGRPC(); err != nil {
-		log.Panicf("cannot start GRPC server: %+v", err)
+	if err := client.Serve(); err != nil {
+		log.Panicf("error serving %+v", err)
 	}
+
 }
