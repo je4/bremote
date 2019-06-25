@@ -17,5 +17,10 @@ message Boolean {
 enum ProxySessionType {
     Undefined = 0;
     Client = 1;
-    Command = 2;
+    Controller = 2;
+}
+
+message ProxyClient {
+    ProxySessionType type = 1;
+    string instance = 2;
 }

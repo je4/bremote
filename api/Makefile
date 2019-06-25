@@ -19,7 +19,7 @@ PROTOC_GO_PARAM=--go_out=plugins=grpc:$(GRPC_GO_OUT)
 PROTOC_JAVA_PARAM_SERVICE=--plugin=protoc-gen-grpc-java=/usr/local/bin/protoc-gen-grpc-java --grpc-java_out=lite:$(GRPC_JAVA_OUT)
 PROTOC_JAVA_PARAM_OBJ=--java_out=$(GRPC_JAVA_OUT)
 
-all: types.pb.go client.pb.go proxy.pb.go
+all: types.pb.go client.pb.go proxy.pb.go controller.pb.go
 
 %.pb.go: %.proto
 	$(PROTOC) $(PROTO_PATH) $(PROTOC_GO_PARAM) $<

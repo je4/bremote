@@ -40,11 +40,25 @@ func (pss ProxyServiceServer) Init(ctx context.Context, param *pb.InitParam) (*e
 		pss.proxySession.SetSessionType(SessionType_Undefined)
 	case pb.ProxySessionType_Client:
 		pss.proxySession.SetSessionType(SessionType_Client)
-	case pb.ProxySessionType_Command:
-		pss.proxySession.SetSessionType(SessionType_Command)
+	case pb.ProxySessionType_Controller:
+		pss.proxySession.SetSessionType(SessionType_Controller)
 	default:
 		return nil, status.Errorf(codes.OutOfRange, fmt.Sprintf("invalid sessiontype %v", param.SessionType))
 	}
 
 	return new(empty.Empty), nil
+}
+
+func (pss ProxyServiceServer) GetClients(ctx context.Context, req *empty.Empty) (*pb.ProxyClientList, error) {
+	clients := new(pb.ProxyClientList)
+	clients.Clients = []*pb.ProxyClient{}
+	for name, session := range pss.proxySession.GetProxy().GetSessions() {
+		// ignore yourself
+		if name == pss.proxySession.GetInstance() {
+			continue
+		}
+
+		clients.Clients = append(clients.Clients, &pb.ProxyClient{Instance:session.GetInstance(), Type:pb.ProxySessionType(session.GetSessionType())})
+	}
+	return clients, nil
 }

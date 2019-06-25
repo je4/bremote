@@ -15,7 +15,12 @@ message InitParam {
     ProxySessionType sessionType = 2;
 }
 
+message ProxyClientList {
+    repeated ProxyClient clients = 1;
+}
+
 service ProxyService {
     rpc Ping( String ) returns ( String ) {};
     rpc Init( InitParam ) returns (google.protobuf.Empty) {}
+    rpc GetClients( google.protobuf.Empty ) returns ( ProxyClientList );
 }

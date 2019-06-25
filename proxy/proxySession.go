@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"github.com/goph/emperror"
 	"github.com/hashicorp/yamux"
 	"github.com/je4/grpc-proxy/proxy"
@@ -11,30 +13,24 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	pb "info_age.net/bremote/api"
-	"strings"
+	"info_age.net/bremote/common"
+	"net"
 	"sync"
 )
 
-type SessionType int
-
-const (
-	SessionType_Undefined SessionType = 0
-	SessionType_Client    SessionType = 1
-	SessionType_Command   SessionType = 2
-)
 
 type ProxySession struct {
 	log         *logging.Logger
 	instance    string
 	proxy       *Proxy
-	sessionType SessionType
+	sessionType common.SessionType
 	service     *ProxyServiceServer
 	grpcServer  *grpc.Server
 	session     *yamux.Session
 }
 
 func NewProxySession(instance string, session *yamux.Session, proxy *Proxy, log *logging.Logger) *ProxySession {
-	ps := &ProxySession{instance:instance, session:session, proxy:proxy, log:log, sessionType: SessionType_Undefined}
+	ps := &ProxySession{instance: instance, session: session, proxy: proxy, log: log, sessionType: common.SessionType_Undefined}
 	return ps
 }
 
@@ -60,29 +56,58 @@ func (ps *ProxySession) Serve() error {
 
 func (ps *ProxySession) ServeGRPC() error {
 
-	director := func(ctx context.Context, fullMethodName string) (*grpc.ClientConn, error) {
+	director := func(ctx context.Context, fullMethodName string) (context.Context, *grpc.ClientConn, error) {
 		// Make sure we never forward internal services.
-		if strings.HasPrefix(fullMethodName, "/com.example.internal.") {
-			return nil, grpc.Errorf(codes.Unimplemented, "Unknown method")
-		}
+		//if strings.HasPrefix(fullMethodName, "/com.example.internal.") {
+		//	return nil, status.Errorf(codes.Unimplemented, "Unknown method")
+		//}
 		md, ok := metadata.FromIncomingContext(ctx)
 		//md, ok := metadata.FromOutgoingContext(ctx)
-		if ok {
-			// Decide on which backend to dial
-			if val, exists := md[":authority"]; exists && val[0] == "staging.api.example.com" {
-				// Make sure we use DialContext so the dialing can be cancelled/time out together with the context.
-				return grpc.DialContext(ctx, "api-service.staging.svc.local", grpc.WithDefaultCallOptions(grpc.ForceCodec(proxy.Codec())))
-			} else if val, exists := md[":authority"]; exists && val[0] == "api.example.com" {
-				return grpc.DialContext(ctx, "api-service.prod.svc.local", grpc.WithDefaultCallOptions(grpc.ForceCodec(proxy.Codec())))
-			}
+		if !ok {
+			ps.log.Errorf("no metadata in call to %v", fullMethodName)
+			return nil, nil, status.Errorf(codes.Unimplemented, "no metadata")
 		}
-		return nil, status.Errorf(codes.Unimplemented, "Unknown method")
+		// check for targetInstance Metadata
+		targetInstance, exists := md["targetinstance"]
+		if !exists {
+			ps.log.Errorf("no targetinstance in call to %v", fullMethodName)
+			return nil, nil, status.Errorf(codes.Unavailable, "no targetinstance in metadata")
+		}
+
+		// check for targetInstance Metadata
+		traceId, exists := md["traceid"]
+		if !exists {
+			ps.log.Errorf("no traceId in call to %v", fullMethodName)
+//			return nil, nil, status.Errorf(codes.Unavailable, "no traceId in metadata")
+		}
+
+		// check for session
+		sess, err := ps.proxy.GetSession(targetInstance[0])
+		if err != nil {
+			ps.log.Errorf("[%v] instance not found in call to %v::%v", traceId[0], targetInstance[0], fullMethodName)
+			return nil, nil, status.Errorf(codes.Unavailable, "[%v] instance not found in call to %v::%v", traceId[0], targetInstance[0], fullMethodName)
+		}
+		conn, err := grpc.DialContext(ctx, ":7777",
+			grpc.WithInsecure(),
+			grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
+				if sess.session == nil {
+					return nil, errors.New(fmt.Sprintf("[%v] session %s closed", traceId[0], s))
+				}
+				return sess.session.Open()
+			}),
+			grpc.WithCodec(proxy.Codec()),
+//			grpc.WithDefaultCallOptions(grpc.ForceCodec(proxy.Codec())),
+		)
+		if err != nil {
+			return nil, nil, status.Errorf(codes.Internal, "[%v] error dialing %v on session %v for %v", traceId[0], ":7777", sess.GetInstance(), fullMethodName)
+		}
+
+		return ctx, conn, nil
 	}
 
-	_ = director
-
 	// create a gRPC server object
-	ps.grpcServer = grpc.NewServer()
+	ps.grpcServer = grpc.NewServer(grpc.CustomCodec(proxy.Codec()),
+		grpc.UnknownServiceHandler(proxy.TransparentHandler(director)))
 
 	ps.service = NewProxyServiceServer(ps, ps.log)
 
@@ -92,7 +117,7 @@ func (ps *ProxySession) ServeGRPC() error {
 	// start the gRPC erver
 	ps.proxy.log.Info("launching gRPC server over TLS connection...")
 	if err := ps.grpcServer.Serve(ps.session); err != nil {
-		ps.proxy.log.Errorf("failed to serve: %v", err )
+		ps.proxy.log.Errorf("failed to serve: %v", err)
 		return emperror.Wrapf(err, "failed to serve")
 	}
 
@@ -115,11 +140,11 @@ func (ps *ProxySession) SetInstance(newinstance string) error {
 	return nil
 }
 
-func (ps *ProxySession) GetSessionType() SessionType {
+func (ps *ProxySession) GetSessionType() common.SessionType {
 	return ps.sessionType
 }
 
-func (ps *ProxySession) SetSessionType(sessionType SessionType) {
+func (ps *ProxySession) SetSessionType(sessionType common.SessionType) {
 	ps.sessionType = sessionType
 	ps.log.Debugf("set session type of %v to %v", ps.instance, sessionType)
 }

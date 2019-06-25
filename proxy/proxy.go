@@ -9,6 +9,9 @@ import (
 	"sync"
 )
 
+/*
+the proxy manages all client and controller sessions
+ */
 type Proxy struct {
 	log      *logging.Logger
 	certFile string
@@ -48,6 +51,9 @@ func (proxy *Proxy) Init() (err error) {
 	return
 }
 
+/*
+add a new session to the session list
+ */
 func (proxy *Proxy) AddSession(session *ProxySession, name string) error {
 	proxy.log.Debugf("add session %v", name)
 	proxy.Lock()
@@ -60,6 +66,19 @@ func (proxy *Proxy) AddSession(session *ProxySession, name string) error {
 	return nil
 }
 
+/*
+get all sessions
+ */
+func (proxy *Proxy) GetSessions() (map[string]*ProxySession) {
+	proxy.RLock()
+	defer proxy.RUnlock()
+
+	return proxy.sessions
+}
+
+/*
+get session by name
+ */
 func (proxy *Proxy) GetSession(name string) (*ProxySession, error) {
 	proxy.RLock()
 	defer proxy.RUnlock()
@@ -71,6 +90,9 @@ func (proxy *Proxy) GetSession(name string) (*ProxySession, error) {
 	return val, nil
 }
 
+/*
+remove session from session list and close the session
+ */
 func (proxy *Proxy) CloseSession(name string) error {
 	proxy.log.Debugf("close session %v", name)
 	session, err := proxy.GetSession(name)
@@ -81,6 +103,9 @@ func (proxy *Proxy) CloseSession(name string) error {
 	return nil
 }
 
+/*
+remove session from session list without closing it
+ */
 func (proxy *Proxy) RemoveSession(name string) (*ProxySession, error) {
 	proxy.log.Debugf("remove session %v", name)
 	proxy.Lock()
@@ -95,6 +120,10 @@ func (proxy *Proxy) RemoveSession(name string) (*ProxySession, error) {
 	return val, nil
 }
 
+/*
+rename session
+needed if instance name is available after session creation
+ */
 func (proxy *Proxy) RenameSession(oldname string, newname string) error {
 	proxy.log.Debugf("rename session %v -> %v", oldname, newname)
 	proxy.Lock()
@@ -136,12 +165,12 @@ func (proxy *Proxy) ListenServe() (err error) {
 		}
 
 		proxy.log.Info("launching a gRPC server over incoming TCP connection")
-		go proxy.Serve(session)
+		go proxy.ServeSession(session)
 	}
 	return
 }
 
-func (proxy *Proxy) Serve(session *yamux.Session) error {
+func (proxy *Proxy) ServeSession(session *yamux.Session) error {
 	// create a server instance
 	instancename := session.RemoteAddr().String()
 
