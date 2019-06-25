@@ -95,8 +95,14 @@ func main() {
 			ret, err := cw.Ping(client)
 			if err != nil {
 				log.Errorf("error pinging %v: %v", client, err)
+				continue
 			}
 			log.Infof("ping result from %v: %v", client, ret)
+
+			opts := map[string]interface{}{"headless":false}
+			if err := cw.StartBrowser(client, &opts); err != nil {
+				log.Errorf("error starting client browser on %v: %v", client, err)
+			}
 		}
 	}()
 

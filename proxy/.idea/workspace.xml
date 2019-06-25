@@ -2,22 +2,12 @@
 <project version="4">
   <component name="ChangeListManager">
     <list default="true" id="18a729b5-ea63-409b-970b-62db0cf9689b" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/../api/clientWrapper.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../api/controller.proto" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../api/proxyWrapper.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../common/types.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../controller/controller.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../controller/controllerHandler.go" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/../controller/main.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../api/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/../api/Makefile" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../api/proxy.pb.go" beforeDir="false" afterPath="$PROJECT_DIR$/../api/proxy.pb.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../api/proxy.proto" beforeDir="false" afterPath="$PROJECT_DIR$/../api/proxy.proto" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../api/types.pb.go" beforeDir="false" afterPath="$PROJECT_DIR$/../api/types.pb.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../api/types.proto" beforeDir="false" afterPath="$PROJECT_DIR$/../api/types.proto" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../api/client.pb.go" beforeDir="false" afterPath="$PROJECT_DIR$/../api/client.pb.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../api/client.proto" beforeDir="false" afterPath="$PROJECT_DIR$/../api/client.proto" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../api/clientWrapper.go" beforeDir="false" afterPath="$PROJECT_DIR$/../api/clientWrapper.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../client/clientHandler.go" beforeDir="false" afterPath="$PROJECT_DIR$/../client/clientHandler.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../controller/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/../controller/main.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/proxy.go" beforeDir="false" afterPath="$PROJECT_DIR$/proxy.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/proxyHandler.go" beforeDir="false" afterPath="$PROJECT_DIR$/proxyHandler.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/proxySession.go" beforeDir="false" afterPath="$PROJECT_DIR$/proxySession.go" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="SHOW_DIALOG" value="false" />
@@ -165,7 +155,6 @@
   </component>
   <component name="ToolWindowManager">
     <frame x="-6" y="0" width="1548" height="830" extended-state="0" />
-    <editor active="true" />
     <layout>
       <window_info id="Favorites" side_tool="true" />
       <window_info content_ui="combo" id="Project" order="0" visible="true" weight="0.24967405" />
