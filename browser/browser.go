@@ -1,4 +1,4 @@
-package main
+package browser
 
 import (
 	"context"
@@ -49,6 +49,7 @@ func (browser *Browser) Init(execOptions map[string]interface{}) error {
 }
 
 func (browser *Browser) Run() error {
+	browser.log.Debug("running browser")
 	if err := chromedp.Run(browser.taskCtx); err != nil {
 		return emperror.Wrap(err, "cannot start chrome")
 	}
@@ -57,6 +58,7 @@ func (browser *Browser) Run() error {
 
 func (browser *Browser) Close() {
 	// all paranoia...
+	browser.log.Debug("closing browser")
 
 	if browser.taskCancel != nil {
 		browser.taskCancel()

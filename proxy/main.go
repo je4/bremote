@@ -16,6 +16,7 @@ func main() {
 	instanceName := flag.String("instance", "", "instance name")
 	certPem := flag.String("cert", "", "tls certificate file in PEM format")
 	keyPem := flag.String("key", "", "tls key file in PEM format")
+	caPem := flag.String("ca", "", "tls ca file in PEM format")
 
 	flag.Parse()
 	if *instanceName == "" {
@@ -27,10 +28,10 @@ func main() {
 	}
 
 	// create logger instance
-	log, lf := common.CreateLogger("client-"+*instanceName, *logFile, *logLevel)
+	log, lf := common.CreateLogger("proxy-"+*instanceName, *logFile, *logLevel)
 	defer lf.Close()
 
-	proxy, err := NewProxy(*certPem, *keyPem, log)
+	proxy, err := NewProxy(*instanceName, *caPem, *certPem, *keyPem, log)
 	if err != nil {
 		log.Fatalf("error creating proxy instance: %+v", err)
 	}

@@ -7,6 +7,7 @@ import (
 	context "context"
 	fmt "fmt"
 	proto "github.com/golang/protobuf/proto"
+	empty "github.com/golang/protobuf/ptypes/empty"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -27,16 +28,20 @@ const _ = proto.ProtoPackageIsVersion3 // please upgrade the proto package
 func init() { proto.RegisterFile("controller.proto", fileDescriptor_ed7f10298fa1d90f) }
 
 var fileDescriptor_ed7f10298fa1d90f = []byte{
-	// 133 bytes of a gzipped FileDescriptorProto
+	// 197 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0xe2, 0x12, 0x48, 0xce, 0xcf, 0x2b,
 	0x29, 0xca, 0xcf, 0xc9, 0x49, 0x2d, 0xd2, 0x2b, 0x28, 0xca, 0x2f, 0xc9, 0x17, 0x12, 0xc8, 0xcc,
-	0x4b, 0xcb, 0x8f, 0x4f, 0x4c, 0x4f, 0xd5, 0x4b, 0x2a, 0x4a, 0xcd, 0xcd, 0x2f, 0x49, 0x95, 0xe2,
-	0x2e, 0xa9, 0x2c, 0x48, 0x2d, 0x86, 0x48, 0x1b, 0x05, 0x72, 0x09, 0x3a, 0xc3, 0xb5, 0x04, 0xa7,
-	0x16, 0x95, 0x65, 0x26, 0xa7, 0x0a, 0xd9, 0x70, 0xb1, 0x04, 0x64, 0xe6, 0xa5, 0x0b, 0x49, 0xe8,
-	0xa1, 0x6b, 0xd6, 0x0b, 0x2e, 0x29, 0xca, 0xcc, 0x4b, 0x97, 0xc2, 0x29, 0xa3, 0xc4, 0xe0, 0xa4,
-	0xc6, 0x25, 0x9f, 0x97, 0x5a, 0x02, 0x56, 0xa0, 0x8b, 0xac, 0x00, 0xe1, 0xb4, 0x28, 0xe6, 0xc4,
-	0x82, 0xcc, 0x24, 0x36, 0xb0, 0x0b, 0x8c, 0x01, 0x01, 0x00, 0x00, 0xff, 0xff, 0x1f, 0x87, 0xe5,
-	0x51, 0xb4, 0x00, 0x00, 0x00,
+	0x4b, 0xcb, 0x8f, 0x4f, 0x4c, 0x4f, 0xd5, 0x4b, 0x2a, 0x4a, 0xcd, 0xcd, 0x2f, 0x49, 0x95, 0x92,
+	0x4e, 0xcf, 0xcf, 0x4f, 0xcf, 0x49, 0xd5, 0x07, 0xcb, 0x27, 0x95, 0xa6, 0xe9, 0xa7, 0xe6, 0x16,
+	0x94, 0x54, 0x42, 0x94, 0x4b, 0x71, 0x97, 0x54, 0x16, 0xa4, 0x16, 0x43, 0x38, 0x46, 0xd7, 0x18,
+	0xb9, 0x04, 0x9d, 0xe1, 0x06, 0x06, 0xa7, 0x16, 0x95, 0x65, 0x26, 0xa7, 0x0a, 0xd9, 0x70, 0xb1,
+	0x04, 0x64, 0xe6, 0xa5, 0x0b, 0x49, 0xe8, 0xa1, 0x1b, 0xad, 0x17, 0x5c, 0x52, 0x94, 0x99, 0x97,
+	0x2e, 0x85, 0x53, 0x46, 0x89, 0x41, 0xc8, 0x9e, 0x8b, 0xd3, 0x2f, 0xb5, 0xdc, 0x39, 0x27, 0x33,
+	0x35, 0xaf, 0x04, 0x8f, 0x11, 0x62, 0x7a, 0x10, 0x57, 0xea, 0xc1, 0x5c, 0xa9, 0xe7, 0x0a, 0x72,
+	0xa5, 0x12, 0x83, 0x90, 0x13, 0x17, 0x4f, 0x50, 0x6a, 0x6e, 0x7e, 0x59, 0x2a, 0xf9, 0x66, 0x38,
+	0xa9, 0x71, 0xc9, 0xe7, 0xa5, 0x96, 0x80, 0x35, 0xea, 0x22, 0x6b, 0x44, 0x84, 0x5e, 0x14, 0x73,
+	0x62, 0x41, 0x66, 0x12, 0x1b, 0x58, 0xa7, 0x31, 0x20, 0x00, 0x00, 0xff, 0xff, 0x68, 0x9b, 0x57,
+	0x8d, 0x57, 0x01, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -52,6 +57,8 @@ const _ = grpc.SupportPackageIsVersion4
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://godoc.org/google.golang.org/grpc#ClientConn.NewStream.
 type ControllerServiceClient interface {
 	Ping(ctx context.Context, in *String, opts ...grpc.CallOption) (*String, error)
+	NewClient(ctx context.Context, in *String, opts ...grpc.CallOption) (*empty.Empty, error)
+	RemoveClient(ctx context.Context, in *String, opts ...grpc.CallOption) (*empty.Empty, error)
 }
 
 type controllerServiceClient struct {
@@ -71,9 +78,29 @@ func (c *controllerServiceClient) Ping(ctx context.Context, in *String, opts ...
 	return out, nil
 }
 
+func (c *controllerServiceClient) NewClient(ctx context.Context, in *String, opts ...grpc.CallOption) (*empty.Empty, error) {
+	out := new(empty.Empty)
+	err := c.cc.Invoke(ctx, "/info_age.bremote.ControllerService/NewClient", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *controllerServiceClient) RemoveClient(ctx context.Context, in *String, opts ...grpc.CallOption) (*empty.Empty, error) {
+	out := new(empty.Empty)
+	err := c.cc.Invoke(ctx, "/info_age.bremote.ControllerService/RemoveClient", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ControllerServiceServer is the server API for ControllerService service.
 type ControllerServiceServer interface {
 	Ping(context.Context, *String) (*String, error)
+	NewClient(context.Context, *String) (*empty.Empty, error)
+	RemoveClient(context.Context, *String) (*empty.Empty, error)
 }
 
 // UnimplementedControllerServiceServer can be embedded to have forward compatible implementations.
@@ -82,6 +109,12 @@ type UnimplementedControllerServiceServer struct {
 
 func (*UnimplementedControllerServiceServer) Ping(ctx context.Context, req *String) (*String, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
+}
+func (*UnimplementedControllerServiceServer) NewClient(ctx context.Context, req *String) (*empty.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method NewClient not implemented")
+}
+func (*UnimplementedControllerServiceServer) RemoveClient(ctx context.Context, req *String) (*empty.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveClient not implemented")
 }
 
 func RegisterControllerServiceServer(s *grpc.Server, srv ControllerServiceServer) {
@@ -106,6 +139,42 @@ func _ControllerService_Ping_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ControllerService_NewClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(String)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControllerServiceServer).NewClient(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/info_age.bremote.ControllerService/NewClient",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControllerServiceServer).NewClient(ctx, req.(*String))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ControllerService_RemoveClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(String)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ControllerServiceServer).RemoveClient(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/info_age.bremote.ControllerService/RemoveClient",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ControllerServiceServer).RemoveClient(ctx, req.(*String))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 var _ControllerService_serviceDesc = grpc.ServiceDesc{
 	ServiceName: "info_age.bremote.ControllerService",
 	HandlerType: (*ControllerServiceServer)(nil),
@@ -113,6 +182,14 @@ var _ControllerService_serviceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Ping",
 			Handler:    _ControllerService_Ping_Handler,
+		},
+		{
+			MethodName: "NewClient",
+			Handler:    _ControllerService_NewClient_Handler,
+		},
+		{
+			MethodName: "RemoveClient",
+			Handler:    _ControllerService_RemoveClient_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

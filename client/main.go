@@ -15,36 +15,38 @@ const addr = `localhost:7777`
 // static server certificate to enable zero config distribution
 const rootPEM = `
 -----BEGIN CERTIFICATE-----
-MIIEZTCCA02gAwIBAgIJAIdMY33R/ifFMA0GCSqGSIb3DQEBCwUAMIHIMQswCQYD
-VQQGEwJDSDEUMBIGA1UECAwLQmFzZWwtU3RhZHQxDjAMBgNVBAcMBUJhc2VsMTQw
-MgYDVQQKDCtIb2Noc2NodWxlIGbDg8K8ciBHZXN0YWx0dW5nIHVuZCBLdW5zdCBG
-SE5XMSIwIAYDVQQLDBlDZW50ZXIgZm9yIERpZ2l0YWwgTWF0dGVyMRQwEgYDVQQD
-DAtFeGlmc2VydmljZTEjMCEGCSqGSIb3DQEJARYUanVlcmdlbi5lbmdlQGZobncu
-Y2gwHhcNMTkwNDE1MDgyNzE4WhcNMjAwNDE0MDgyNzE4WjCByDELMAkGA1UEBhMC
-Q0gxFDASBgNVBAgMC0Jhc2VsLVN0YWR0MQ4wDAYDVQQHDAVCYXNlbDE0MDIGA1UE
-CgwrSG9jaHNjaHVsZSBmw4PCvHIgR2VzdGFsdHVuZyB1bmQgS3Vuc3QgRkhOVzEi
-MCAGA1UECwwZQ2VudGVyIGZvciBEaWdpdGFsIE1hdHRlcjEUMBIGA1UEAwwLRXhp
-ZnNlcnZpY2UxIzAhBgkqhkiG9w0BCQEWFGp1ZXJnZW4uZW5nZUBmaG53LmNoMIIB
-IjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA6wa14NQoGlACqlW2qe7EnTbf
-lCn4KPX5duWnR+BE0BvYaw11gTvt6dCumwgc48QuYJzlsFY/4aQEAIGTktEpioxS
-p8vlzDa/wVi+tTtWrMVwPoNRbu4tKTgNEPNJ0Wx7Jhb4MqRDOC0AtSUIhIoIq7tx
-Eacvmw8ZLDFYxXmG920I3w6A7BNL+TYARYlUJI6hXSppt7vggMa0ZN7umXsrrp20
-nG5qnXNSReTl0NmWakQLzG/jUgGOhFY485MXCobawIIlItYqGDq0UnwD2R8kuLXg
-BiWpmCqI6yVroOAllsZjzo426tzmPt920rg5lWZL49Mg8tCDxAtA14z+CTnsJQID
-AQABo1AwTjAdBgNVHQ4EFgQUX96Aw24Am6a+Iob4N/wsAc447RIwHwYDVR0jBBgw
-FoAUX96Aw24Am6a+Iob4N/wsAc447RIwDAYDVR0TBAUwAwEB/zANBgkqhkiG9w0B
-AQsFAAOCAQEAfSwBFUAUjDsnusZQ2hfzcu57D83m5YOyb+JaaZ3uktKG2PdJMfye
-dy7IvSb+hvhxsvSWCJ52YIV8ITej7NGs8R80S134yVS+cm6i0/sYjKuKXHtgbdW7
-kSPttWgM79Ji4/YO8kXdzzmKUuT3XszylFfLYgNsegdlQYY5LcvzUIAJFsb1kNJX
-lDe29U43+k3V/NN3u9IJvdnVP0kYCm2dtNam1LEudlnRxzmcLTOE4bQZxQSK5iU5
-VdCNHmQGa0aa9FmaTXNppiqUE0IwfJF55VqFbaGmzLFJ9DOVXsKyB38Yojmv6k1u
-bXNoO/zdRfQFL0B7nTB/vJn93y9on3ORjA==
+MIID9jCCAt6gAwIBAgIJAOi0aUVvT/JiMA0GCSqGSIb3DQEBCwUAMIGPMQswCQYD
+VQQGEwJERTEMMAoGA1UECAwDTlJXMQ4wDAYDVQQHDAVFYXJ0aDEXMBUGA1UECgwO
+UmFuZG9tIENvbXBhbnkxCzAJBgNVBAsMAklUMRcwFQYDVQQDDA53d3cucmFuZG9t
+LmNvbTEjMCEGCSqGSIb3DQEJARYUanVlcmdlbkBpbmZvLWFnZS5uZXQwHhcNMTkw
+NjI2MTMxNDI5WhcNMjkwNjIzMTMxNDI5WjCBjzELMAkGA1UEBhMCREUxDDAKBgNV
+BAgMA05SVzEOMAwGA1UEBwwFRWFydGgxFzAVBgNVBAoMDlJhbmRvbSBDb21wYW55
+MQswCQYDVQQLDAJJVDEXMBUGA1UEAwwOd3d3LnJhbmRvbS5jb20xIzAhBgkqhkiG
+9w0BCQEWFGp1ZXJnZW5AaW5mby1hZ2UubmV0MIIBIjANBgkqhkiG9w0BAQEFAAOC
+AQ8AMIIBCgKCAQEAxzI1anTX5H082jcBziT65bBvv37WbbEPvtY+CfBMp1Wyy59T
+sH8aIHryiv6zXhKP3Xw7H6ybFnS+ZMyMp66QfzoRkgRGK85Pz71iHSOagqIDRo0i
+rM51QSUwc/0b/NiLTi+Lo/pf+BUmQyOnCum71Mw1JvI8qUVAQssu4tcK6wG8x+Ag
+2Sxf38E2hqTzt599hvmrVcmRCf/yOW35Igjox/m+Fzq99BeCzRva6Qrl7aN2RaI+
+1Pq0uvchPNSGQUgMMC2v5ZbVc9ruduxMav7jj87EPdMHzuB00RZLImHj1qEaSvK6
+0zjkRU5JztvVefxGOlLWszlQc597/OVXm152RwIDAQABo1MwUTAdBgNVHQ4EFgQU
+yj4IGbn7Iz2wGuITyJJjBxYy/pAwHwYDVR0jBBgwFoAUyj4IGbn7Iz2wGuITyJJj
+BxYy/pAwDwYDVR0TAQH/BAUwAwEB/zANBgkqhkiG9w0BAQsFAAOCAQEAfykYtqq+
+XEiu5H9fyGfoczbuGDbtHkPU2/IYuaaJuHhT+S++tOlEqZEVgfRMibHdYryFZtx1
+yPbWAspdLgTcooEHZEfEdP1YcbKXtpBn+fmxaWqN78ETl1j2E+e49Ykl1ztmSE+5
+CNRmynE8E3RxCtUK+O2+gaChxZn4A/epnlO4JaMDPep6H+Ba/pcPKyIgesqZPv5S
+d/uNLKFokMQMqVyV8hSWwE/D78oED5f/eoJ7UAEDh2jhLtZaodFN7nYnj9MOCqmE
+48Se8WlIO64SzhXIcmhQixvFswxJm1Fru1JIM8rfDraSyPpKzwJdr2g80Il53pGt
+/v72XYHCtlzjSQ==
 -----END CERTIFICATE-----`
 
 func main() {
 	logFile := flag.String("logfile", "", "log file location")
 	logLevel := flag.String("loglevel", "DEBUG", "LOGLEVEL: CRITICAL|ERROR|WARNING|NOTICE|INFO|DEBUG")
 	instanceName := flag.String("instance", "", "instance name")
+	certPem := flag.String("cert", "", "tls client certificate file in PEM format")
+	keyPem := flag.String("key", "", "tls client key file in PEM format")
+	caPem := flag.String("ca", "", "tls root certificate file in PEM format")
+
 	flag.Parse()
 	if *instanceName == "" {
 		h, err := os.Hostname()
@@ -58,7 +60,7 @@ func main() {
 	log, lf := common.CreateLogger("client-"+*instanceName, *logFile, *logLevel)
 	defer lf.Close()
 
-	client := NewClient(*instanceName, log)
+	client := NewClient(*instanceName, *caPem, *certPem, *keyPem, log)
 
 	go func() {
 		sigint := make(chan os.Signal, 1)

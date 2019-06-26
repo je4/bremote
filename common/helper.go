@@ -1,8 +1,11 @@
 package common
 
 import (
-//	"github.com/goph/emperror"
+	"context"
+	"errors"
+	//	"github.com/goph/emperror"
 	"github.com/op/go-logging"
+	"google.golang.org/grpc/metadata"
 	"os"
 )
 
@@ -33,3 +36,56 @@ func CreateLogger(module string, logfile string, loglevel string) (log *logging.
 	return
 }
 
+func RpcContextMetadata2(ctx context.Context) (traceId string, sourceInstance string, err error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	//md, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
+		return "", "", errors.New("no metadata in context")
+	}
+
+	// check for sourceInstance Metadata
+	si, exists := md["sourceinstance"]
+	if !exists {
+		return "", "", errors.New("no sourceinstance in context")
+	}
+	sourceInstance = si[0]
+
+	// check for targetInstance Metadata
+	tr, exists := md["traceid"]
+	if !exists {
+		return "", "", errors.New("no traceid in context")
+	}
+	traceId = tr[0]
+
+	return
+}
+func RpcContextMetadata(ctx context.Context) (traceId string, sourceInstance string, targetInstance string, err error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	//md, ok := metadata.FromOutgoingContext(ctx)
+	if !ok {
+		return "", "", "", errors.New("no metadata in context")
+	}
+
+	// check for targetInstance Metadata
+	ti, exists := md["targetinstance"]
+	if !exists {
+		return "", "", "", errors.New("no targetinstance in context")
+	}
+	targetInstance = ti[0]
+
+	// check for sourceInstance Metadata
+	si, exists := md["sourceinstance"]
+	if !exists {
+		return "", "", "", errors.New("no sourceinstance in context")
+	}
+	sourceInstance = si[0]
+
+	// check for targetInstance Metadata
+	tr, exists := md["traceid"]
+	if !exists {
+		return "", "", "", errors.New("no traceid in context")
+	}
+	traceId = tr[0]
+
+	return
+}

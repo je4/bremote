@@ -1,34 +1,62 @@
 package main
 
 import (
-	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"fmt"
 	"github.com/goph/emperror"
 	"github.com/hashicorp/yamux"
+	"github.com/mintance/go-uniqid"
 	"github.com/op/go-logging"
 	"google.golang.org/grpc"
 	pb "info_age.net/bremote/api"
+	"info_age.net/bremote/browser"
+	"info_age.net/bremote/common"
+	"io/ioutil"
 	"log"
-	"net"
 	"sync"
 	"time"
 )
 
 type Client struct {
 	log        *logging.Logger
-	instance string
+	instance   string
+	caFile     string
+	certFile   string
+	keyFile    string
 	conn       *tls.Conn
 	session    *yamux.Session
 	grpcServer *grpc.Server
-	end chan bool
+	end        chan bool
+	browser    *browser.Browser
 }
 
-func NewClient(instance string, log *logging.Logger) *Client {
-	client := &Client{log: log, instance:instance, end:make(chan bool, 1)}
+func NewClient(instance string, caFile string, certFile string, keyFile string, log *logging.Logger) *Client {
+	client := &Client{log: log,
+		instance: instance,
+		caFile:   caFile,
+		certFile: certFile,
+		keyFile:  keyFile,
+		end:      make(chan bool, 1),
+	}
 	return client
+}
+
+func (client *Client) SetBrowser(browser *browser.Browser) error {
+	if client.browser != nil {
+		return errors.New("browser already exists")
+	}
+	client.browser = browser
+	return nil
+}
+
+func (client *Client) ShutdownBrowser() error {
+	if client.browser == nil {
+		return errors.New("no browser available")
+	}
+	client.browser.Close()
+	client.browser = nil
+	return nil
 }
 
 func (client *Client) Connect() (err error) {
@@ -41,12 +69,33 @@ func (client *Client) Connect() (err error) {
 	if !ok {
 		panic("failed to parse root certificate")
 	}
+	if client.caFile != "" {
+		bs, err := ioutil.ReadFile(client.caFile)
+		if err != nil {
+			client.log.Panicf("error reading %v: %v", client.caFile, err)
+		}
+
+		ok := roots.AppendCertsFromPEM(bs)
+		if !ok {
+			client.log.Panicf("failed to parse root certificate:\n%v", string(bs))
+		}
+	}
+
+	certificates := []tls.Certificate{}
+	if client.certFile != "" {
+		cert, err := tls.LoadX509KeyPair(client.certFile, client.keyFile)
+		if err != nil {
+			log.Fatalf("server: loadkeys: %s", err)
+		}
+		certificates = append(certificates, cert)
+	}
 
 	client.log.Infof("trying to connect %v", addr)
 	client.conn, err = tls.Dial("tcp", addr, &tls.Config{
 		RootCAs:            roots,
 		InsecureSkipVerify: true,
 		ServerName:         "localhost",
+		Certificates:       certificates,
 	})
 	if err != nil {
 		return emperror.Wrapf(err, "cannot connect to %v", addr)
@@ -68,12 +117,11 @@ func (client *Client) Serve() error {
 	for {
 		var wg sync.WaitGroup
 
-
 		if err := client.Connect(); err != nil {
 			client.log.Errorf("cannot connect client %v", err)
 			waitTime += time.Second
 			if waitTime > time.Second*10 {
-				waitTime = time.Second*10
+				waitTime = time.Second * 10
 			}
 		} else {
 			waitTime = time.Second
@@ -100,8 +148,8 @@ func (client *Client) Serve() error {
 		client.log.Infof("sleeping %v seconds...", waitTime.Seconds())
 		// wait 10 seconds or finish if needed
 		select {
-		case <- time.After(waitTime):
-		case <- client.end:
+		case <-time.After(waitTime):
+		case <-client.end:
 			client.log.Info("shutting down")
 			return nil
 		}
@@ -112,23 +160,10 @@ func (client *Client) Serve() error {
 
 func (client *Client) InitProxy() error {
 
-	// gRPC dial over incoming net.Conn
-	conn, err := grpc.Dial(":7777", grpc.WithInsecure(),
-		grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
-			if client.session == nil {
-				return nil, errors.New(fmt.Sprintf("session %s closed", s))
-			}
-			return client.session.Open()
-		}),
-	)
-	if err != nil {
-		return errors.New("cannot dial grpc connection to :7777")
-	}
-	proxy := pb.NewProxyServiceClient(conn)
-	str := &pb.InitParam{Instance:&pb.String{Value:client.instance},
-		SessionType:pb.ProxySessionType_Client}
-	_, err = proxy.Init(context.Background(), str)
-	if err != nil {
+	pw := pb.NewProxyWrapper(client.instance, &client.session)
+
+	traceId := uniqid.New(uniqid.Params{"traceid_", false})
+	if err := pw.Init(traceId, client.instance, common.SessionType_Client); err != nil {
 		return emperror.Wrap(err, "cannot initialize client")
 	}
 	return nil
@@ -136,7 +171,7 @@ func (client *Client) InitProxy() error {
 
 func (client *Client) ServeGRPC() error {
 	// create a server instance
-	server := NewClientServiceServer(client.log)
+	server := NewClientServiceServer(client, client.log)
 
 	// create a gRPC server object
 	client.grpcServer = grpc.NewServer()
@@ -166,6 +201,11 @@ func (client *Client) Close() error {
 	if client.conn != nil {
 		client.conn.Close()
 		client.conn = nil
+	}
+
+	if client.browser != nil {
+		client.browser.Close()
+		client.browser = nil
 	}
 
 	return nil

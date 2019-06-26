@@ -7,6 +7,7 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/goph/emperror"
 	"github.com/hashicorp/yamux"
+	"github.com/mintance/go-uniqid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"info_age.net/bremote/common"
@@ -14,57 +15,87 @@ import (
 )
 
 type ProxyWrapper struct {
-	instanceName string
-	session **yamux.Session
+	instanceName       string
+	session            **yamux.Session
 	proxyServiceClient *ProxyServiceClient
 }
 
-func NewProxyWrapper( instanceName string, session **yamux.Session) *ProxyWrapper {
-	cw := &ProxyWrapper{instanceName:instanceName, session:session, proxyServiceClient:nil}
+func NewProxyWrapper(instanceName string, session **yamux.Session) *ProxyWrapper {
+	cw := &ProxyWrapper{instanceName: instanceName, session: session, proxyServiceClient: nil}
 	return cw
 }
 
-func (cw *ProxyWrapper) connect() error {
+func (pw *ProxyWrapper) connect() error {
+	if *pw.session == nil {
+		pw.proxyServiceClient = nil
+		return errors.New(fmt.Sprintf("session closed"))
+	}
+
 	// it's a singleton
-	if cw.proxyServiceClient != nil {
+	if pw.proxyServiceClient != nil {
 		return nil
 	}
 	// gRPC dial over incoming net.Conn
 	conn, err := grpc.Dial(":7777", grpc.WithInsecure(),
 		grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
-			if cw.session == nil {
+			if *pw.session == nil {
 				return nil, errors.New(fmt.Sprintf("session %s closed", s))
 			}
-			return (*cw.session).Open()
+			return (*pw.session).Open()
 		}),
 	)
 	if err != nil {
 		return errors.New("cannot dial grpc connection to :7777")
 	}
 	c := NewProxyServiceClient(conn)
-	cw.proxyServiceClient = &c
+	pw.proxyServiceClient = &c
 	return nil
 }
 
-func (cw *ProxyWrapper) Ping( targetInstance string ) (string, error) {
-	if err := cw.connect(); err != nil {
-		return "", emperror.Wrapf(err, "cannot connect to %v", targetInstance)
+func (cw *ProxyWrapper) Ping(traceId string) (string, error) {
+	if traceId == "" {
+		traceId = uniqid.New(uniqid.Params{"traceid_", false})
 	}
 
-	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", targetInstance )
-	pingResult, err := (*cw.proxyServiceClient).Ping(ctx, &String{Value:"ping"})
+	if err := cw.connect(); err != nil {
+		return "", emperror.Wrapf(err, "cannot connect")
+	}
+
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "traceid", traceId)
+	pingResult, err := (*cw.proxyServiceClient).Ping(ctx, &String{Value: "ping"})
 	if err != nil {
-		return "", emperror.Wrapf(err, "error pinging %v", targetInstance)
+		return "", emperror.Wrapf(err, "error pinging")
 	}
 	return pingResult.GetValue(), nil
 }
 
-func (cw *ProxyWrapper) GetClients( t common.SessionType ) ([]string, error) {
-	if err := cw.connect(); err != nil {
-		return []string{}, emperror.Wrapf(err, "cannot connect"	)
+func (cw *ProxyWrapper) Init(traceId string, instance string, sessionType common.SessionType) (error) {
+	if traceId == "" {
+		traceId = uniqid.New(uniqid.Params{"traceid_", false})
 	}
 
-	clients, err := (*cw.proxyServiceClient).GetClients(context.Background(), &empty.Empty{})
+	if err := cw.connect(); err != nil {
+		return emperror.Wrapf(err, "cannot connect")
+	}
+
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "traceid", traceId)
+	_, err := (*cw.proxyServiceClient).Init(ctx, &InitParam{Instance:&String{Value:instance},SessionType:ProxySessionType(sessionType)})
+	if err != nil {
+		return emperror.Wrapf(err, "error initializing instance")
+	}
+	return nil
+}
+
+func (cw *ProxyWrapper) GetClients(traceId string, t common.SessionType) ([]string, error) {
+	if traceId == "" {
+		traceId = uniqid.New(uniqid.Params{"traceid_", false})
+	}
+	if err := cw.connect(); err != nil {
+		return []string{}, emperror.Wrapf(err, "cannot connect")
+	}
+
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "traceid", traceId)
+	clients, err := (*cw.proxyServiceClient).GetClients(ctx, &empty.Empty{})
 	if err != nil {
 		return []string{}, emperror.Wrap(err, "cannot get clients")
 	}

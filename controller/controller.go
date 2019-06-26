@@ -9,9 +9,13 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/goph/emperror"
 	"github.com/hashicorp/yamux"
+	"github.com/mintance/go-uniqid"
 	"github.com/op/go-logging"
 	"google.golang.org/grpc"
 	pb "info_age.net/bremote/api"
+	"info_age.net/bremote/common"
+	"io/ioutil"
+	"log"
 	"net"
 	"sync"
 	"time"
@@ -20,41 +24,88 @@ import (
 type Controller struct {
 	log        *logging.Logger
 	instance   string
+	caFile     string
+	certFile   string
+	keyFile    string
 	conn       *tls.Conn
 	session    *yamux.Session
 	grpcServer *grpc.Server
 	end        chan bool
+	roots *x509.CertPool
+	certificates *[]tls.Certificate
 }
 
-func NewController(instance string, log *logging.Logger) *Controller {
-	controller := &Controller{log: log, instance: instance, end: make(chan bool, 1)}
+func NewController(instance string, caFile string, certFile string, keyFile string, log *logging.Logger) *Controller {
+	controller := &Controller{log: log,
+		instance: instance,
+		caFile:   caFile,
+		certFile: certFile,
+		keyFile:  keyFile,
+		end: make(chan bool, 1),
+	}
 	return controller
 }
+
+func (controller *Controller) GetInstance() (string) {
+	return controller.instance
+}
+
+func (controller *Controller) GetSessionPtr() (**yamux.Session) {
+	return &controller.session
+}
+
 
 func (controller *Controller) Connect() (err error) {
 
 	// First, create the set of root certificates. For this example we only
 	// have one. It's also possible to omit this in order to use the
 	// default root set of the current operating system.
-	roots := x509.NewCertPool()
-	ok := roots.AppendCertsFromPEM([]byte(rootPEM))
-	if !ok {
-		panic("failed to parse root certificate")
+	if controller.roots == nil {
+		controller.roots = x509.NewCertPool()
+		ok := controller.roots.AppendCertsFromPEM([]byte(rootPEM))
+		if !ok {
+			panic("failed to parse root certificate")
+		}
+		if controller.caFile != "" {
+			bs, err := ioutil.ReadFile(controller.caFile)
+			if err != nil {
+				controller.log.Panicf("error reading %v: %v", controller.caFile, err)
+			}
+
+			ok := controller.roots.AppendCertsFromPEM(bs)
+			if !ok {
+				controller.log.Panicf("failed to parse root certificate:\n%v", string(bs))
+			}
+		}
 	}
 
+	if controller.certificates ==  nil {
+		certificates := []tls.Certificate{}
+		if controller.certFile != "" {
+			cert, err := tls.LoadX509KeyPair(controller.certFile, controller.keyFile)
+			if err != nil {
+				log.Fatalf("server: loadkeys: %s", err)
+			}
+			certificates = append(certificates, cert)
+		}
+		controller.certificates = &certificates
+	}
 	controller.log.Infof("trying to connect %v", addr)
 	controller.conn, err = tls.Dial("tcp", addr, &tls.Config{
-		RootCAs:            roots,
+		RootCAs:            controller.roots,
 		InsecureSkipVerify: true,
 		ServerName:         "localhost",
+		Certificates:       *controller.certificates,
 	})
 	if err != nil {
+		controller.conn = nil
 		return emperror.Wrapf(err, "cannot connect to %v", addr)
 	}
 	controller.log.Info("connection established")
 
 	controller.session, err = yamux.Server(controller.conn, yamux.DefaultConfig())
 	if err != nil {
+		controller.session = nil
 		return emperror.Wrap(err, "cannot setup yamux controller")
 	}
 	controller.log.Info("yamux session established")
@@ -82,6 +133,7 @@ func (controller *Controller) Serve() error {
 			go func() {
 				if err := controller.ServeGRPC(); err != nil {
 					controller.log.Errorf("error serving GRPC: %v", err)
+					controller.Close()
 				}
 				wg.Done()
 			}()
@@ -111,24 +163,11 @@ func (controller *Controller) Serve() error {
 
 func (controller *Controller) InitProxy() error {
 
-	// gRPC dial over incoming net.Conn
-	conn, err := grpc.Dial(":7777", grpc.WithInsecure(),
-		grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
-			if controller.session == nil {
-				return nil, errors.New(fmt.Sprintf("session %s closed", s))
-			}
-			return controller.session.Open()
-		}),
-	)
-	if err != nil {
-		return errors.New("cannot dial grpc connection to :7777")
-	}
-	proxy := pb.NewProxyServiceClient(conn)
-	str := &pb.InitParam{Instance: &pb.String{Value: controller.instance},
-		SessionType: pb.ProxySessionType_Controller}
-	_, err = proxy.Init(context.Background(), str)
-	if err != nil {
-		return emperror.Wrap(err, "cannot initialize controller")
+	pw := pb.NewProxyWrapper(controller.instance, &controller.session)
+
+	traceId := uniqid.New(uniqid.Params{"traceid_", false})
+	if err := pw.Init(traceId, controller.instance, common.SessionType_Controller); err != nil {
+		return emperror.Wrap(err, "cannot initialize client")
 	}
 	return nil
 }
@@ -165,7 +204,7 @@ func (controller *Controller) GetClients() ([]string, error) {
 
 func (controller *Controller) ServeGRPC() error {
 	// create a server instance
-	server := NewControllerServiceServer(controller.log)
+	server := NewControllerServiceServer(controller, controller.log)
 
 	// create a gRPC server object
 	controller.grpcServer = grpc.NewServer()
@@ -176,8 +215,10 @@ func (controller *Controller) ServeGRPC() error {
 	// start the gRPC erver
 	controller.log.Info("launching gRPC server over TLS connection...")
 	if err := controller.grpcServer.Serve(controller.session); err != nil {
+		controller.grpcServer = nil
 		return emperror.Wrapf(err, "failed to serve")
 	}
+	controller.grpcServer = nil
 	return nil
 }
 

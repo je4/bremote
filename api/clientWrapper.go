@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/goph/emperror"
 	"github.com/hashicorp/yamux"
+	"github.com/mintance/go-uniqid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"net"
@@ -24,6 +26,11 @@ func NewClientWrapper( instanceName string, session **yamux.Session) *ClientWrap
 }
 
 func (cw *ClientWrapper) connect() error {
+	if *cw.session == nil {
+		cw.clientServiceClient = nil
+		return errors.New(fmt.Sprintf("session closed"))
+	}
+
 	// it's a singleton
 	if cw.clientServiceClient != nil {
 		return nil
@@ -31,7 +38,7 @@ func (cw *ClientWrapper) connect() error {
 	// gRPC dial over incoming net.Conn
 	conn, err := grpc.Dial(":7777", grpc.WithInsecure(),
 		grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
-			if cw.session == nil {
+			if *cw.session == nil {
 				return nil, errors.New(fmt.Sprintf("session %s closed", s))
 			}
 			return (*cw.session).Open()
@@ -45,12 +52,17 @@ func (cw *ClientWrapper) connect() error {
 	return nil
 }
 
-func (cw *ClientWrapper) Ping( targetInstance string ) (string, error) {
+
+
+func (cw *ClientWrapper) Ping( traceId string, targetInstance string ) (string, error) {
+	if traceId == "" {
+		traceId = uniqid.New(uniqid.Params{"traceid_", false})
+	}
 	if err := cw.connect(); err != nil {
 		return "", emperror.Wrapf(err, "cannot connect to %v", targetInstance)
 	}
 
-	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", targetInstance )
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", targetInstance, "traceId", traceId )
 	pingResult, err := (*cw.clientServiceClient).Ping(ctx, &String{Value:"ping"})
 	if err != nil {
 		return "", emperror.Wrapf(err, "error pinging %v", targetInstance)
@@ -58,12 +70,15 @@ func (cw *ClientWrapper) Ping( targetInstance string ) (string, error) {
 	return pingResult.GetValue(), nil
 }
 
-func (cw *ClientWrapper) StartBrowser( targetInstance string, execOptions *map[string]interface{} ) (error) {
+func (cw *ClientWrapper) StartBrowser( traceId string, targetInstance string, execOptions *map[string]interface{} ) (error) {
+	if traceId == "" {
+		traceId = uniqid.New(uniqid.Params{"traceid_", false})
+	}
 	if err := cw.connect(); err != nil {
 		return emperror.Wrapf(err, "cannot connect to %v", targetInstance)
 	}
 
-	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", targetInstance )
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", targetInstance, "traceId", traceId )
 
 	flags := []*BrowserInitFlag{}
 	for name, val := range *execOptions {
@@ -87,3 +102,20 @@ func (cw *ClientWrapper) StartBrowser( targetInstance string, execOptions *map[s
 	}
 	return nil
 }
+
+func (cw *ClientWrapper) ShutdownBrowser( traceId string, targetInstance string) (error) {
+	if traceId == "" {
+		traceId = uniqid.New(uniqid.Params{"traceid_", false})
+	}
+	if err := cw.connect(); err != nil {
+		return emperror.Wrapf(err, "cannot connect to %v",  targetInstance)
+	}
+
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", targetInstance, "traceId", traceId )
+	_, err := (*cw.clientServiceClient).ShutdownBrowser(ctx, &empty.Empty{})
+	if err != nil {
+		return emperror.Wrapf(err, "error shutting down browser of %v", targetInstance)
+	}
+	return nil
+}
+

@@ -61,37 +61,27 @@ func (ps *ProxySession) ServeGRPC() error {
 		//if strings.HasPrefix(fullMethodName, "/com.example.internal.") {
 		//	return nil, status.Errorf(codes.Unimplemented, "Unknown method")
 		//}
-		md, ok := metadata.FromIncomingContext(ctx)
-		//md, ok := metadata.FromOutgoingContext(ctx)
-		if !ok {
-			ps.log.Errorf("no metadata in call to %v", fullMethodName)
-			return nil, nil, status.Errorf(codes.Unimplemented, "no metadata")
-		}
-		// check for targetInstance Metadata
-		targetInstance, exists := md["targetinstance"]
-		if !exists {
-			ps.log.Errorf("no targetinstance in call to %v", fullMethodName)
-			return nil, nil, status.Errorf(codes.Unavailable, "no targetinstance in metadata")
-		}
-
-		// check for targetInstance Metadata
-		traceId, exists := md["traceid"]
-		if !exists {
-			ps.log.Errorf("no traceId in call to %v", fullMethodName)
-//			return nil, nil, status.Errorf(codes.Unavailable, "no traceId in metadata")
+		traceId, sourceInstance, targetInstance, err := common.RpcContextMetadata(ctx)
+		if err != nil {
+			ps.log.Errorf("invalid metadata in call to %v: %v", "Ping()", err)
+			return nil, nil, status.Errorf(codes.Unavailable, fmt.Sprintf("invalid metadata: %v", err))
 		}
 
 		// check for session
-		sess, err := ps.proxy.GetSession(targetInstance[0])
+		sess, err := ps.proxy.GetSession(targetInstance)
 		if err != nil {
-			ps.log.Errorf("[%v] instance not found in call to %v::%v", traceId[0], targetInstance[0], fullMethodName)
-			return nil, nil, status.Errorf(codes.Unavailable, "[%v] instance not found in call to %v::%v", traceId[0], targetInstance[0], fullMethodName)
+			ps.log.Errorf("[%v] instance not found in call to %v::%v -> %v%v", traceId, sourceInstance, targetInstance, fullMethodName)
+			return nil, nil, status.Errorf(codes.Unavailable, "[%v] instance not found in call to %v::%v -> %v%v", traceId, sourceInstance, targetInstance, fullMethodName)
 		}
+
+		// make sure, that we transfer the metadata to the target client
+		ctx = metadata.AppendToOutgoingContext(ctx, "sourceInstance", sourceInstance, "targetInstance", targetInstance, "traceId", traceId )
+
 		conn, err := grpc.DialContext(ctx, ":7777",
 			grpc.WithInsecure(),
 			grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
 				if sess.session == nil {
-					return nil, errors.New(fmt.Sprintf("[%v] session %s closed", traceId[0], s))
+					return nil, errors.New(fmt.Sprintf("[%v] session %s closed", traceId, s))
 				}
 				return sess.session.Open()
 			}),
@@ -99,8 +89,10 @@ func (ps *ProxySession) ServeGRPC() error {
 //			grpc.WithDefaultCallOptions(grpc.ForceCodec(proxy.Codec())),
 		)
 		if err != nil {
-			return nil, nil, status.Errorf(codes.Internal, "[%v] error dialing %v on session %v for %v", traceId[0], ":7777", sess.GetInstance(), fullMethodName)
+			return nil, nil, status.Errorf(codes.Internal, "[%v] error dialing %v on session %v for %v", traceId, ":7777", sess.GetInstance(), fullMethodName)
 		}
+
+		ps.log.Debugf("[%v] directing %v -> %v%v", traceId, sourceInstance, targetInstance, fullMethodName)
 
 		return ctx, conn, nil
 	}
@@ -130,6 +122,10 @@ func (ps *ProxySession) GetService() *ProxyServiceServer {
 
 func (ps *ProxySession) GetInstance() string {
 	return ps.instance
+}
+
+func (ps *ProxySession) GetSessionPtr() **yamux.Session{
+	return &ps.session
 }
 
 func (ps *ProxySession) SetInstance(newinstance string) error {
