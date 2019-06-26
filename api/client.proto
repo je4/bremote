@@ -24,4 +24,5 @@ message BrowserInitFlags {
 service ClientService {
 	rpc Ping( String ) returns ( String ) {};
 	rpc StartBrowser( BrowserInitFlags ) returns ( google.protobuf.Empty ) {};
+	rpc ShutdownBrowser( google.protobuf.Empty ) returns ( google.protobuf.Empty ) {};
 }

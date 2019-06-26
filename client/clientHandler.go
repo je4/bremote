@@ -3,14 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/chromedp/chromedp"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/op/go-logging"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	pb "info_age.net/bremote/api"
 	"io/ioutil"
-	"os"
 	"path/filepath"
 )
 
@@ -35,43 +33,32 @@ func (css ClientServiceServer) Ping(ctx context.Context, param *pb.String) (*pb.
 func (css ClientServiceServer) StartBrowser(ctx context.Context, req *pb.BrowserInitFlags) (*empty.Empty, error) {
 	css.log.Infof("StartBrowser()")
 
-	dir, err := ioutil.TempDir("", "chromedp-example")
-	if err != nil {
-		css.log.Error("cannot create tempdir")
-		return nil, status.Errorf(codes.Internal, "cannot create tempdir")
-	}
-	defer os.RemoveAll(dir)
-
-	opts := append(
-		chromedp.DefaultExecAllocatorOptions[:], chromedp.UserDataDir(dir),
-		chromedp.Flag("start-fullscreen", true),
-		chromedp.Flag("disable-notifications", true),
-		chromedp.Flag("disable-infobars", true),
-		)
+	// build option map
+	execOptions := make( map[string]interface{})
 	for _, opt := range req.Flags {
 		oval := opt.GetValue()
 		switch oval.(type) {
 		case *pb.BrowserInitFlag_Strval:
-			opts = append(opts, chromedp.Flag(opt.GetName(), opt.GetStrval()))
+			execOptions[opt.GetName()] = opt.GetStrval()
 		case *pb.BrowserInitFlag_Bval:
-			opts = append(opts, chromedp.Flag(opt.GetName(), opt.GetBval()))
+			execOptions[opt.GetName()] = opt.GetBval()
 		}
 	}
 
-	allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
-	defer cancel()
-
-	// also set up a custom logger
-	taskCtx, cancel := chromedp.NewContext(allocCtx, chromedp.WithLogf(css.log.Infof))
-	defer cancel()
+	browser, err := NewBrowser(execOptions, css.log)
+	if err != nil {
+		css.log.Errorf("initialize browser: %v", err)
+		return nil, status.Errorf(codes.Internal, fmt.Sprintf("cannot initialize brower: %v", err))
+	}
+	defer browser.Close()
 
 	// ensure that the browser process is started
-	if err := chromedp.Run(taskCtx); err != nil {
-		css.log.Errorf("cannot start chrome: %v", err)
-		return nil, status.Errorf(codes.Internal, fmt.Sprintf("cannot start chrome: %v", err))
+	if err := browser.Run(); err != nil {
+		css.log.Errorf("cannot run browser: %v", err)
+		return nil, status.Errorf(codes.Internal, fmt.Sprintf("cannot run brower: %v", err))
 	}
 
-	path := filepath.Join(dir, "DevToolsActivePort")
+	path := filepath.Join(browser.TempDir, "DevToolsActivePort")
 	bs, err := ioutil.ReadFile(path)
 	if err != nil {
 		css.log.Errorf("error reading DevToolsActivePort: %v", err)

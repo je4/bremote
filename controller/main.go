@@ -99,7 +99,14 @@ func main() {
 			}
 			log.Infof("ping result from %v: %v", client, ret)
 
-			opts := map[string]interface{}{"headless":false}
+			opts := map[string]interface{}{
+				"headless":false,
+				"start-fullscreen": true,
+				"disable-notifications": true,
+				"disable-infobars": true,
+				"disable-gpu": false,
+			}
+
 			if err := cw.StartBrowser(client, &opts); err != nil {
 				log.Errorf("error starting client browser on %v: %v", client, err)
 			}
