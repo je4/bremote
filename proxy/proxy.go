@@ -18,6 +18,7 @@ the proxy manages all client and controller sessions
 type Proxy struct {
 	log      *logging.Logger
 	instance string
+	addr string
 	caFile   string
 	certFile string
 	keyFile  string
@@ -30,9 +31,10 @@ type Proxy struct {
 /*
 create a new Proxy instance
 */
-func NewProxy(instanceName string, caFile string, certFile string, keyFile string, log *logging.Logger) (*Proxy, error) {
+func NewProxy(instanceName string, addr string, caFile string, certFile string, keyFile string, log *logging.Logger) (*Proxy, error) {
 	proxy := &Proxy{log: log,
 		instance: instanceName,
+		addr:addr,
 		caFile:   caFile,
 		certFile: certFile,
 		keyFile:  keyFile,
@@ -171,14 +173,14 @@ func (proxy *Proxy) RenameSession(oldname string, newname string) error {
 
 func (proxy *Proxy) ListenServe() (err error) {
 
-	listener, err := tls.Listen("tcp", addr, proxy.tlsCfg)
+	listener, err := tls.Listen("tcp", proxy.addr, proxy.tlsCfg)
 	if err != nil {
-		return emperror.Wrapf(err, "cannot start tcp listener on %v", addr)
+		return emperror.Wrapf(err, "cannot start tcp listener on %v", proxy.addr)
 	}
 	defer listener.Close()
 
 	for {
-		proxy.log.Infof("waiting for incoming TLS connections on %v", addr)
+		proxy.log.Infof("waiting for incoming TLS connections on %v", proxy.addr)
 		// Accept blocks until there is an incoming TCP connection
 		incoming, err := listener.Accept()
 		if err != nil {

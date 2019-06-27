@@ -7,8 +7,6 @@ import (
 	"os"
 )
 
-// static address to enable zero config distribution
-const addr = `localhost:7777`
 
 func main() {
 	logFile := flag.String("logfile", "", "log file location")
@@ -17,6 +15,7 @@ func main() {
 	certPem := flag.String("cert", "", "tls certificate file in PEM format")
 	keyPem := flag.String("key", "", "tls key file in PEM format")
 	caPem := flag.String("ca", "", "tls ca file in PEM format")
+	addr := flag.String("listen", "localhost:7777", "interface:port to listen")
 
 	flag.Parse()
 	if *instanceName == "" {
@@ -31,7 +30,7 @@ func main() {
 	log, lf := common.CreateLogger("proxy-"+*instanceName, *logFile, *logLevel)
 	defer lf.Close()
 
-	proxy, err := NewProxy(*instanceName, *caPem, *certPem, *keyPem, log)
+	proxy, err := NewProxy(*instanceName, *addr, *caPem, *certPem, *keyPem, log)
 	if err != nil {
 		log.Fatalf("error creating proxy instance: %+v", err)
 	}
