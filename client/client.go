@@ -6,12 +6,12 @@ import (
 	"errors"
 	"github.com/goph/emperror"
 	"github.com/hashicorp/yamux"
-	"github.com/mintance/go-uniqid"
-	"github.com/op/go-logging"
-	"google.golang.org/grpc"
 	pb "github.com/je4/bremote/api"
 	"github.com/je4/bremote/browser"
 	"github.com/je4/bremote/common"
+	"github.com/mintance/go-uniqid"
+	"github.com/op/go-logging"
+	"google.golang.org/grpc"
 	"io/ioutil"
 	"log"
 	"sync"
@@ -21,6 +21,7 @@ import (
 type Client struct {
 	log        *logging.Logger
 	instance   string
+	addr       string
 	caFile     string
 	certFile   string
 	keyFile    string
@@ -31,9 +32,10 @@ type Client struct {
 	browser    *browser.Browser
 }
 
-func NewClient(instance string, caFile string, certFile string, keyFile string, log *logging.Logger) *Client {
+func NewClient(instance string, addr string, caFile string, certFile string, keyFile string, log *logging.Logger) *Client {
 	client := &Client{log: log,
 		instance: instance,
+		addr:     addr,
 		caFile:   caFile,
 		certFile: certFile,
 		keyFile:  keyFile,
@@ -90,15 +92,15 @@ func (client *Client) Connect() (err error) {
 		certificates = append(certificates, cert)
 	}
 
-	client.log.Infof("trying to connect %v", addr)
-	client.conn, err = tls.Dial("tcp", addr, &tls.Config{
+	client.log.Infof("trying to connect %v", client.addr)
+	client.conn, err = tls.Dial("tcp", client.addr, &tls.Config{
 		RootCAs:            roots,
 		InsecureSkipVerify: true,
 		ServerName:         "localhost",
 		Certificates:       certificates,
 	})
 	if err != nil {
-		return emperror.Wrapf(err, "cannot connect to %v", addr)
+		return emperror.Wrapf(err, "cannot connect to %v", client.addr)
 	}
 	client.log.Info("connection established")
 

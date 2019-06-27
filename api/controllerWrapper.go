@@ -76,7 +76,7 @@ func (cw *ControllerWrapper) NewClient(traceId string, client string) (error) {
 		return emperror.Wrapf(err, "cannot connect")
 	}
 
-	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "traceid", traceId)
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", client, "traceid", traceId)
 	_, err := (*cw.controllerServiceClient).NewClient(ctx, &String{Value: client})
 	if err != nil {
 		return emperror.Wrapf(err, "error pinging")

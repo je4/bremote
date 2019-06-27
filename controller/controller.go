@@ -24,6 +24,7 @@ import (
 type Controller struct {
 	log        *logging.Logger
 	instance   string
+	addr string
 	caFile     string
 	certFile   string
 	keyFile    string
@@ -35,9 +36,10 @@ type Controller struct {
 	certificates *[]tls.Certificate
 }
 
-func NewController(instance string, caFile string, certFile string, keyFile string, log *logging.Logger) *Controller {
+func NewController(instance string, addr string, caFile string, certFile string, keyFile string, log *logging.Logger) *Controller {
 	controller := &Controller{log: log,
 		instance: instance,
+		addr:addr,
 		caFile:   caFile,
 		certFile: certFile,
 		keyFile:  keyFile,
@@ -90,8 +92,8 @@ func (controller *Controller) Connect() (err error) {
 		}
 		controller.certificates = &certificates
 	}
-	controller.log.Infof("trying to connect %v", addr)
-	controller.conn, err = tls.Dial("tcp", addr, &tls.Config{
+	controller.log.Infof("trying to connect %v", controller.addr)
+	controller.conn, err = tls.Dial("tcp", controller.addr, &tls.Config{
 		RootCAs:            controller.roots,
 		InsecureSkipVerify: true,
 		ServerName:         "localhost",
@@ -99,7 +101,7 @@ func (controller *Controller) Connect() (err error) {
 	})
 	if err != nil {
 		controller.conn = nil
-		return emperror.Wrapf(err, "cannot connect to %v", addr)
+		return emperror.Wrapf(err, "cannot connect to %v", controller.addr)
 	}
 	controller.log.Info("connection established")
 

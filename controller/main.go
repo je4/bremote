@@ -13,7 +13,7 @@ import (
 )
 
 // static address to enable zero config distribution
-const addr = `localhost:7777`
+//const addr = `localhost:7777`
 
 // static server certificate to enable zero config distribution
 const rootPEM = `
@@ -49,6 +49,7 @@ func main() {
 	certPem := flag.String("cert", "", "tls client certificate file in PEM format")
 	keyPem := flag.String("key", "", "tls client key file in PEM format")
 	caPem := flag.String("ca", "", "tls root certificate file in PEM format")
+	addr := flag.String("proxy", "localhost:7777", "proxy addr:port")
 
 	flag.Parse()
 	if *instanceName == "" {
@@ -63,7 +64,7 @@ func main() {
 	log, lf := common.CreateLogger("controller-"+*instanceName, *logFile, *logLevel)
 	defer lf.Close()
 
-	controller := NewController(*instanceName, *caPem, *certPem, *keyPem, log)
+	controller := NewController(*instanceName, *addr, *caPem, *certPem, *keyPem, log)
 
 	go func() {
 		sigint := make(chan os.Signal, 1)
