@@ -12,8 +12,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	pb "info_age.net/bremote/api"
-	"info_age.net/bremote/common"
+	pb "github.com/je4/bremote/api"
+	"github.com/je4/bremote/common"
 	"net"
 	"sync"
 )

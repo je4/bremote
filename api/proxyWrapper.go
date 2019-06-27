@@ -10,7 +10,7 @@ import (
 	"github.com/mintance/go-uniqid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
-	"info_age.net/bremote/common"
+	"github.com/je4/bremote/common"
 	"net"
 )
 

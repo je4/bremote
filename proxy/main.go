@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"info_age.net/bremote/common"
+	"github.com/je4/bremote/common"
 	"log"
 	"os"
 )

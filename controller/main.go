@@ -3,8 +3,8 @@ package main
 import (
 	"flag"
 	"github.com/mintance/go-uniqid"
-	"info_age.net/bremote/api"
-	"info_age.net/bremote/common"
+	"github.com/je4/bremote/api"
+	"github.com/je4/bremote/common"
 	"log"
 	"os"
 	"os/signal"

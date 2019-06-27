@@ -8,9 +8,9 @@ import (
 	"github.com/op/go-logging"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"info_age.net/bremote/api"
-	pb "info_age.net/bremote/api"
-	"info_age.net/bremote/common"
+	"github.com/je4/bremote/api"
+	pb "github.com/je4/bremote/api"
+	"github.com/je4/bremote/common"
 	"time"
 )
 
