@@ -30,6 +30,7 @@ type Client struct {
 	grpcServer *grpc.Server
 	end        chan bool
 	browser    *browser.Browser
+	status     string
 }
 
 func NewClient(instance string, addr string, caFile string, certFile string, keyFile string, log *logging.Logger) *Client {
@@ -40,6 +41,7 @@ func NewClient(instance string, addr string, caFile string, certFile string, key
 		certFile: certFile,
 		keyFile:  keyFile,
 		end:      make(chan bool, 1),
+		status:   "",
 	}
 	return client
 }

@@ -2,9 +2,9 @@ package main
 
 import (
 	"flag"
-	"github.com/mintance/go-uniqid"
 	"github.com/je4/bremote/api"
 	"github.com/je4/bremote/common"
+	"github.com/mintance/go-uniqid"
 	"log"
 	"os"
 	"os/signal"
@@ -92,7 +92,7 @@ func main() {
 		}
 		pw := api.NewProxyWrapper(*instanceName, &controller.session)
 
-		traceId :=uniqid.New(uniqid.Params{"traceid_", false})
+		traceId := uniqid.New(uniqid.Params{"traceid_", false})
 		clients, err := pw.GetClients(traceId, common.SessionType_Client)
 		if err != nil {
 			log.Errorf("cannot get clients: %v", err)
@@ -101,7 +101,7 @@ func main() {
 
 		cw := api.NewClientWrapper(*instanceName, &controller.session)
 		for _, client := range clients {
-			traceId :=uniqid.New(uniqid.Params{"traceid_", false})
+			traceId := uniqid.New(uniqid.Params{"traceid_", false})
 			ret, err := cw.Ping(traceId, client)
 			if err != nil {
 				log.Errorf("[%v] error pinging %v: %v", traceId, client, err)
@@ -110,15 +110,16 @@ func main() {
 			log.Infof("[%v] ping result from %v: %v", traceId, client, ret)
 
 			opts := map[string]interface{}{
-				"headless":              false,
-				"start-fullscreen":      true,
-				"disable-notifications": true,
-				"disable-infobars":      true,
-				"disable-gpu":           false,
+				"headless":                 false,
+				"start-fullscreen":         true,
+				"disable-notifications":    true,
+				"disable-infobars":         true,
+				"disable-gpu":              false,
+				"allow-insecure-localhost": true,
 			}
 
-			traceId =uniqid.New(uniqid.Params{"traceid_", false})
-			log.Infof("[%v] starting down browser of %v", traceId, client)
+			traceId = uniqid.New(uniqid.Params{"traceid_", false})
+			log.Infof("[%v] starting browser of %v", traceId, client)
 			if err := cw.StartBrowser(traceId, client, &opts); err != nil {
 				log.Errorf("[%v] error starting client browser on %v: %v", traceId, client, err)
 			}
@@ -130,14 +131,14 @@ func main() {
 			log.Error("session connection not available")
 			return
 		}
-		traceId =uniqid.New(uniqid.Params{"traceid_", false})
+		traceId = uniqid.New(uniqid.Params{"traceid_", false})
 		clients, err = pw.GetClients(traceId, common.SessionType_Client)
 		if err != nil {
 			log.Errorf("[%v] cannot get clients: %v", traceId, err)
 		}
 		log.Infof("Clients: %v", clients)
 		for _, client := range clients {
-			traceId =uniqid.New(uniqid.Params{"traceid_", false})
+			traceId = uniqid.New(uniqid.Params{"traceid_", false})
 			log.Infof("[%v] shutting down browser of %v", traceId, client)
 			if err := cw.ShutdownBrowser(traceId, client); err != nil {
 				log.Errorf("error shutting down browser of %v: %v", client, err)

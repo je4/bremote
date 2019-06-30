@@ -13,6 +13,7 @@ option java_package = "net.info-age.bremote.proxy";
 message InitParam {
     String instance = 1;
     ProxySessionType sessionType = 2;
+    String status = 3;
 }
 
 message ProxyClientList {

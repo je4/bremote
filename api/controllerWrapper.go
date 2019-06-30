@@ -50,7 +50,7 @@ func (pw *ControllerWrapper) connect() error {
 	return nil
 }
 
-func (cw *ControllerWrapper) Ping(traceId string) (string, error) {
+func (cw *ControllerWrapper) Ping(traceId string, targetInstance string, param string) (string, error) {
 	if traceId == "" {
 		traceId = uniqid.New(uniqid.Params{"traceid_", false})
 	}
@@ -59,15 +59,15 @@ func (cw *ControllerWrapper) Ping(traceId string) (string, error) {
 		return "", emperror.Wrapf(err, "cannot connect")
 	}
 
-	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "traceid", traceId)
-	pingResult, err := (*cw.controllerServiceClient).Ping(ctx, &String{Value: "ping"})
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", targetInstance, "traceid", traceId)
+	pingResult, err := (*cw.controllerServiceClient).Ping(ctx, &String{Value: param})
 	if err != nil {
-		return "", emperror.Wrapf(err, "error pinging")
+		return "", emperror.Wrapf(err, "error calling %s::Ping(%s)", targetInstance, param)
 	}
 	return pingResult.GetValue(), nil
 }
 
-func (cw *ControllerWrapper) NewClient(traceId string, client string) (error) {
+func (cw *ControllerWrapper) NewClient(traceId string, targetInstance string, client string) (error) {
 	if traceId == "" {
 		traceId = uniqid.New(uniqid.Params{"traceid_", false})
 	}
@@ -76,10 +76,10 @@ func (cw *ControllerWrapper) NewClient(traceId string, client string) (error) {
 		return emperror.Wrapf(err, "cannot connect")
 	}
 
-	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", client, "traceid", traceId)
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", targetInstance, "traceid", traceId)
 	_, err := (*cw.controllerServiceClient).NewClient(ctx, &String{Value: client})
 	if err != nil {
-		return emperror.Wrapf(err, "error pinging")
+		return emperror.Wrapf(err, "error calling %x::NewClient(%s)", targetInstance, client)
 	}
 	return nil
 }

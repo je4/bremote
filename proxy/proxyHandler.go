@@ -59,6 +59,10 @@ func (pss ProxyServiceServer) Init(ctx context.Context, param *pb.InitParam) (*e
 		time.Sleep(time.Millisecond * 300)
 
 		for name, session := range pss.proxySession.GetProxy().GetSessions() {
+			// don't notify myself
+			if name == client {
+				continue
+			}
 			// send message to all controllers
 			if session.GetSessionType() != common.SessionType_Controller {
 				continue
@@ -67,8 +71,8 @@ func (pss ProxyServiceServer) Init(ctx context.Context, param *pb.InitParam) (*e
 
 			traceId = uniqid.New(uniqid.Params{"traceid_", false})
 			pss.log.Infof("[%v] starting down browser of %v", traceId, client)
-			if err := cw.NewClient(traceId, client); err != nil {
-				pss.log.Errorf("[%v] error starting client browser on %v: %v", traceId, client, err)
+			if err := cw.NewClient(traceId, name, client); err != nil {
+				pss.log.Errorf("[%v] error notificating %v about %v: %v", traceId, name, client, err)
 			}
 		}
 	}()
