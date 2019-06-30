@@ -1,22 +1,17 @@
 package main
 
 import (
-	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
-	"fmt"
-	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/goph/emperror"
 	"github.com/hashicorp/yamux"
+	pb "github.com/je4/bremote/api"
+	"github.com/je4/bremote/common"
 	"github.com/mintance/go-uniqid"
 	"github.com/op/go-logging"
 	"google.golang.org/grpc"
-	pb "github.com/je4/bremote/api"
-	"github.com/je4/bremote/common"
 	"io/ioutil"
 	"log"
-	"net"
 	"sync"
 	"time"
 )
@@ -168,39 +163,20 @@ func (controller *Controller) InitProxy() error {
 	pw := pb.NewProxyWrapper(controller.instance, &controller.session)
 
 	traceId := uniqid.New(uniqid.Params{"traceid_", false})
-	if err := pw.Init(traceId, controller.instance, common.SessionType_Controller); err != nil {
+	if err := pw.Init(traceId, controller.instance, common.SessionType_Controller, common.ClientStatus_Empty); err != nil {
 		return emperror.Wrap(err, "cannot initialize client")
 	}
 	return nil
 }
 
-func (controller *Controller) GetClients() ([]string, error) {
-	// gRPC dial over incoming net.Conn
-	conn, err := grpc.Dial(":7777", grpc.WithInsecure(),
-		grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
-			if controller.session == nil {
-				return nil, errors.New(fmt.Sprintf("session %s closed", s))
-			}
-			return controller.session.Open()
-		}),
-	)
+func (controller *Controller) GetClients() ([]common.ClientInfo, error) {
+	pw := pb.NewProxyWrapper(controller.instance, controller.GetSessionPtr())
+	traceId := uniqid.New(uniqid.Params{"traceid_", false})
+	clients, err := pw.GetClients(traceId, common.SessionType_Client, true)
 	if err != nil {
-		return []string{}, errors.New("cannot dial grpc connection to :7777")
+		return []common.ClientInfo{}, emperror.Wrap(err, "cannot get clients")
 	}
-	proxy := pb.NewProxyServiceClient(conn)
-	clients, err := proxy.GetClients(context.Background(), &empty.Empty{})
-	if err != nil {
-		return []string{}, emperror.Wrap(err, "cannot get clients")
-	}
-	ret := []string{}
-	for _, c := range clients.GetClients() {
-		// we only want to get clients
-		if c.GetType() != pb.ProxySessionType_Client {
-			continue
-		}
-		ret = append(ret, c.GetInstance())
-	}
-	return ret, nil
+	return clients, nil
 }
 
 

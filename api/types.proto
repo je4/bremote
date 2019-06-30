@@ -22,4 +22,5 @@ enum ProxySessionType {
 message ProxyClient {
     ProxySessionType type = 1;
     string instance = 2;
+    string status = 3;
 }

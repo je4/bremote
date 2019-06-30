@@ -67,7 +67,7 @@ func (cw *ControllerWrapper) Ping(traceId string, targetInstance string, param s
 	return pingResult.GetValue(), nil
 }
 
-func (cw *ControllerWrapper) NewClient(traceId string, targetInstance string, client string) (error) {
+func (cw *ControllerWrapper) NewClient(traceId string, targetInstance string, client string, clientStatus string) (error) {
 	if traceId == "" {
 		traceId = uniqid.New(uniqid.Params{"traceid_", false})
 	}
@@ -77,7 +77,7 @@ func (cw *ControllerWrapper) NewClient(traceId string, targetInstance string, cl
 	}
 
 	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", targetInstance, "traceid", traceId)
-	_, err := (*cw.controllerServiceClient).NewClient(ctx, &String{Value: client})
+	_, err := (*cw.controllerServiceClient).NewClient(ctx, &NewClientParam{Client: client, Status:clientStatus})
 	if err != nil {
 		return emperror.Wrapf(err, "error calling %x::NewClient(%s)", targetInstance, client)
 	}

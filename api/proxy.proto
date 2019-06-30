@@ -11,17 +11,21 @@ option go_package="api";
 option java_package = "net.info-age.bremote.proxy";
 
 message InitParam {
-    String instance = 1;
+    string instance = 1;
     ProxySessionType sessionType = 2;
-    String status = 3;
+    string status = 3;
 }
 
 message ProxyClientList {
     repeated ProxyClient clients = 1;
 }
 
+message GetClientsParam {
+    bool withStatus = 1;
+}
+
 service ProxyService {
     rpc Ping( String ) returns ( String ) {};
     rpc Init( InitParam ) returns (google.protobuf.Empty) {}
-    rpc GetClients( google.protobuf.Empty ) returns ( ProxyClientList );
+    rpc GetClients( GetClientsParam ) returns ( ProxyClientList );
 }

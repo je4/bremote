@@ -8,3 +8,14 @@ const (
 	SessionType_Client     SessionType = 1
 	SessionType_Controller SessionType = 2
 )
+
+const (
+	ClientStatus_Empty        string = ""
+	ClientStatus_EmptyBrowser string = "emptyBrowser"
+)
+
+type ClientInfo struct {
+	InstanceName string
+	Status       string
+	Type         SessionType
+}

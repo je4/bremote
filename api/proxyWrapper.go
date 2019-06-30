@@ -4,13 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/goph/emperror"
 	"github.com/hashicorp/yamux"
+	"github.com/je4/bremote/common"
 	"github.com/mintance/go-uniqid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
-	"github.com/je4/bremote/common"
 	"net"
 )
 
@@ -69,7 +68,7 @@ func (cw *ProxyWrapper) Ping(traceId string) (string, error) {
 	return pingResult.GetValue(), nil
 }
 
-func (cw *ProxyWrapper) Init(traceId string, instance string, sessionType common.SessionType) (error) {
+func (cw *ProxyWrapper) Init(traceId string, instance string, sessionType common.SessionType, status string) (error) {
 	if traceId == "" {
 		traceId = uniqid.New(uniqid.Params{"traceid_", false})
 	}
@@ -79,27 +78,30 @@ func (cw *ProxyWrapper) Init(traceId string, instance string, sessionType common
 	}
 
 	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "traceid", traceId)
-	_, err := (*cw.proxyServiceClient).Init(ctx, &InitParam{Instance:&String{Value:instance},SessionType:ProxySessionType(sessionType)})
+	_, err := (*cw.proxyServiceClient).Init(ctx, &InitParam{
+		Instance:instance,
+		SessionType:ProxySessionType(sessionType),
+		Status:status})
 	if err != nil {
 		return emperror.Wrapf(err, "error initializing instance")
 	}
 	return nil
 }
 
-func (cw *ProxyWrapper) GetClients(traceId string, t common.SessionType) ([]string, error) {
+func (cw *ProxyWrapper) GetClients(traceId string, t common.SessionType, withStatus bool) ([]common.ClientInfo, error) {
 	if traceId == "" {
 		traceId = uniqid.New(uniqid.Params{"traceid_", false})
 	}
 	if err := cw.connect(); err != nil {
-		return []string{}, emperror.Wrapf(err, "cannot connect")
+		return []common.ClientInfo{}, emperror.Wrapf(err, "cannot connect")
 	}
 
 	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "traceid", traceId)
-	clients, err := (*cw.proxyServiceClient).GetClients(ctx, &empty.Empty{})
+	clients, err := (*cw.proxyServiceClient).GetClients(ctx, &GetClientsParam{WithStatus:withStatus})
 	if err != nil {
-		return []string{}, emperror.Wrap(err, "cannot get clients")
+		return []common.ClientInfo{}, emperror.Wrap(err, "cannot get clients")
 	}
-	ret := []string{}
+	ret := []common.ClientInfo{}
 	for _, c := range clients.GetClients() {
 		// we only want we need
 		if t != common.SessionType_All {
@@ -107,7 +109,11 @@ func (cw *ProxyWrapper) GetClients(traceId string, t common.SessionType) ([]stri
 				continue
 			}
 		}
-		ret = append(ret, c.GetInstance())
+		ret = append(ret, common.ClientInfo{
+			InstanceName:c.GetInstance(),
+			Type:common.SessionType(c.GetType()),
+			Status:c.GetStatus(),
+		})
 	}
 	return ret, nil
 }

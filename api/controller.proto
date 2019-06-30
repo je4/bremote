@@ -9,8 +9,13 @@ option go_package="api";
 //option php_namespace="mediaserver";
 option java_package = "net.info-age.bremote.controller";
 
+message NewClientParam {
+    string client = 1;
+    string status = 2;
+}
+
 service ControllerService {
     rpc Ping( String ) returns ( String ) {};
-    rpc NewClient( String ) returns ( google.protobuf.Empty ) {};
+    rpc NewClient( NewClientParam ) returns ( google.protobuf.Empty ) {};
     rpc RemoveClient( String ) returns ( google.protobuf.Empty ) {};
 }

@@ -93,7 +93,7 @@ func main() {
 		pw := api.NewProxyWrapper(*instanceName, &controller.session)
 
 		traceId := uniqid.New(uniqid.Params{"traceid_", false})
-		clients, err := pw.GetClients(traceId, common.SessionType_Client)
+		clients, err := pw.GetClients(traceId, common.SessionType_Client, true)
 		if err != nil {
 			log.Errorf("cannot get clients: %v", err)
 		}
@@ -101,50 +101,54 @@ func main() {
 
 		cw := api.NewClientWrapper(*instanceName, &controller.session)
 		for _, client := range clients {
+			/* not necessary because GetClients was called withStatus
 			traceId := uniqid.New(uniqid.Params{"traceid_", false})
-			ret, err := cw.Ping(traceId, client)
+			ret, err := cw.Ping(traceId, client.InstanceName)
 			if err != nil {
-				log.Errorf("[%v] error pinging %v: %v", traceId, client, err)
+				log.Errorf("[%v] error pinging %v: %v", traceId, client.InstanceName, err)
 				continue
 			}
-			log.Infof("[%v] ping result from %v: %v", traceId, client, ret)
+			log.Infof("[%v] ping result from %v: %v", traceId, client.InstanceName, ret)
+			*/
+			if client.Status == common.ClientStatus_Empty {
+				opts := map[string]interface{}{
+					"headless":                 false,
+					"start-fullscreen":         true,
+					"disable-notifications":    true,
+					"disable-infobars":         true,
+					"disable-gpu":              false,
+					"allow-insecure-localhost": true,
+				}
 
-			opts := map[string]interface{}{
-				"headless":                 false,
-				"start-fullscreen":         true,
-				"disable-notifications":    true,
-				"disable-infobars":         true,
-				"disable-gpu":              false,
-				"allow-insecure-localhost": true,
+				traceId = uniqid.New(uniqid.Params{"traceid_", false})
+				log.Infof("[%v] starting browser of %v", traceId, client)
+				if err := cw.StartBrowser(traceId, client.InstanceName, &opts); err != nil {
+					log.Errorf("[%v] error starting client browser on %v: %v", traceId, client, err)
+				}
 			}
+		}
 
+		/*
+			time.Sleep(time.Second * 15)
+			if controller.session == nil {
+				log.Error("session connection not available")
+				return
+			}
 			traceId = uniqid.New(uniqid.Params{"traceid_", false})
-			log.Infof("[%v] starting browser of %v", traceId, client)
-			if err := cw.StartBrowser(traceId, client, &opts); err != nil {
-				log.Errorf("[%v] error starting client browser on %v: %v", traceId, client, err)
+			clients, err = pw.GetClients(traceId, common.SessionType_Client, false)
+			if err != nil {
+				log.Errorf("[%v] cannot get clients: %v", traceId, err)
 			}
-
-		}
-
-		time.Sleep(time.Second * 15)
-		if controller.session == nil {
-			log.Error("session connection not available")
-			return
-		}
-		traceId = uniqid.New(uniqid.Params{"traceid_", false})
-		clients, err = pw.GetClients(traceId, common.SessionType_Client)
-		if err != nil {
-			log.Errorf("[%v] cannot get clients: %v", traceId, err)
-		}
-		log.Infof("Clients: %v", clients)
-		for _, client := range clients {
-			traceId = uniqid.New(uniqid.Params{"traceid_", false})
-			log.Infof("[%v] shutting down browser of %v", traceId, client)
-			if err := cw.ShutdownBrowser(traceId, client); err != nil {
-				log.Errorf("error shutting down browser of %v: %v", client, err)
-				continue
+			log.Infof("Clients: %v", clients)
+			for _, client := range clients {
+				traceId = uniqid.New(uniqid.Params{"traceid_", false})
+				log.Infof("[%v] shutting down browser of %v", traceId, client)
+				if err := cw.ShutdownBrowser(traceId, client.InstanceName); err != nil {
+					log.Errorf("error shutting down browser of %v: %v", client, err)
+					continue
+				}
 			}
-		}
+		*/
 	}()
 
 	if err := controller.Serve(); err != nil {

@@ -86,6 +86,7 @@ func (css ClientServiceServer) StartBrowser(ctx context.Context, req *pb.Browser
 //	lines := bytes.Split(bs, []byte("\n"))
 	css.log.Debugf("DevToolsActivePort:\n%v", string(bs))
 
+	css.client.SetStatus(common.ClientStatus_EmptyBrowser)
 	return &empty.Empty{}, nil
 }
 
@@ -98,5 +99,30 @@ func (css ClientServiceServer) ShutdownBrowser(ctx context.Context, req *empty.E
 
 	css.log.Infof("[%v] %v -> %v/ShutdownBrowser()", traceId, sourceInstance, targetInstance)
 	css.client.ShutdownBrowser()
+	css.client.SetStatus(common.ClientStatus_Empty)
+	return &empty.Empty{}, nil
+}
+
+func (css ClientServiceServer) GetStatus(ctx context.Context, param *empty.Empty) (*pb.String, error) {
+	traceId, sourceInstance, targetInstance, err := common.RpcContextMetadata(ctx)
+	if err != nil {
+		css.log.Errorf("invalid metadata in call to %v::GetStatus(): %v", css.client.GetInstance(), err)
+		return nil, status.Errorf(codes.Unavailable, fmt.Sprintf("invalid metadata: %v", err))
+	}
+
+	css.log.Infof("[%v] %v -> %v/GetStatus()", traceId, sourceInstance, targetInstance)
+	return &pb.String{Value:css.client.GetStatus()}, nil
+}
+
+func (css ClientServiceServer) SetStatus(ctx context.Context, param *pb.String) (*empty.Empty, error) {
+	stat := param.GetValue()
+	traceId, sourceInstance, targetInstance, err := common.RpcContextMetadata(ctx)
+	if err != nil {
+		css.log.Errorf("invalid metadata in call to %v::SetStatus(%v): %v", css.client.GetInstance(), stat, err)
+		return nil, status.Errorf(codes.Unavailable, fmt.Sprintf("invalid metadata: %v", err))
+	}
+
+	css.log.Infof("[%v] %v -> %v/SetStatus(%v)", traceId, sourceInstance, targetInstance, stat)
+	css.client.SetStatus(stat)
 	return &empty.Empty{}, nil
 }

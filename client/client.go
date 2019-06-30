@@ -41,7 +41,7 @@ func NewClient(instance string, addr string, caFile string, certFile string, key
 		certFile: certFile,
 		keyFile:  keyFile,
 		end:      make(chan bool, 1),
-		status:   "",
+		status:   common.ClientStatus_Empty,
 	}
 	return client
 }
@@ -53,6 +53,19 @@ func (client *Client) SetBrowser(browser *browser.Browser) error {
 	client.browser = browser
 	return nil
 }
+
+func (client *Client) SetStatus(status string) {
+	client.status = status
+}
+
+func (client *Client) GetStatus() string {
+	return client.status
+}
+
+func (client *Client) GetInstance() string {
+	return client.instance
+}
+
 
 func (client *Client) ShutdownBrowser() error {
 	if client.browser == nil {
@@ -143,12 +156,12 @@ func (client *Client) Serve() error {
 				time.Sleep(time.Second * 1)
 				if err := client.InitProxy(); err != nil {
 					log.Panicf("cannot initialize proxy: %+v", err)
-					client.Close()
+					client.CloseServices()
 				}
 			}()
 		}
 		wg.Wait()
-		client.Close()
+		client.CloseServices()
 		client.log.Infof("sleeping %v seconds...", waitTime.Seconds())
 		// wait 10 seconds or finish if needed
 		select {
@@ -159,6 +172,7 @@ func (client *Client) Serve() error {
 		}
 		//time.Sleep(time.Second*10)
 	}
+	client.Close()
 	return nil
 }
 
@@ -167,7 +181,7 @@ func (client *Client) InitProxy() error {
 	pw := pb.NewProxyWrapper(client.instance, &client.session)
 
 	traceId := uniqid.New(uniqid.Params{"traceid_", false})
-	if err := pw.Init(traceId, client.instance, common.SessionType_Client); err != nil {
+	if err := pw.Init(traceId, client.instance, common.SessionType_Client, client.GetStatus()); err != nil {
 		return emperror.Wrap(err, "cannot initialize client")
 	}
 	return nil
@@ -191,7 +205,7 @@ func (client *Client) ServeGRPC() error {
 	return nil
 }
 
-func (client *Client) Close() error {
+func (client *Client) CloseServices() error {
 	if client.grpcServer != nil {
 		client.grpcServer.GracefulStop()
 		client.grpcServer = nil
@@ -205,6 +219,14 @@ func (client *Client) Close() error {
 	if client.conn != nil {
 		client.conn.Close()
 		client.conn = nil
+	}
+	return nil
+}
+
+func (client *Client) Close() error {
+
+	if err := client.CloseServices(); err != nil {
+		return err
 	}
 
 	if client.browser != nil {
