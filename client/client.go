@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -14,35 +15,52 @@ import (
 	"google.golang.org/grpc"
 	"io/ioutil"
 	"log"
+	"net"
+	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"sync"
 	"time"
 )
 
 type Client struct {
-	log        *logging.Logger
-	instance   string
-	addr       string
-	caFile     string
-	certFile   string
-	keyFile    string
-	conn       *tls.Conn
-	session    *yamux.Session
-	grpcServer *grpc.Server
-	end        chan bool
-	browser    *browser.Browser
-	status     string
+	log           *logging.Logger
+	instance      string
+	addr          string
+	httpStatic    string
+	httpTemplates string
+	caFile        string
+	certFile      string
+	keyFile       string
+	httpsCertFile string
+	httpsKeyFile  string
+	httpsAddr     string
+	conn          *tls.Conn
+	session       *yamux.Session
+	grpcServer    *grpc.Server
+	httpServerInt *http.Server
+	httpServerExt *http.Server
+	end           chan bool
+	browser       *browser.Browser
+	status        string
 }
 
-func NewClient(instance string, addr string, caFile string, certFile string, keyFile string, log *logging.Logger) *Client {
+func NewClient(config Config, log *logging.Logger) *Client {
 	client := &Client{log: log,
-		instance: instance,
-		addr:     addr,
-		caFile:   caFile,
-		certFile: certFile,
-		keyFile:  keyFile,
-		end:      make(chan bool, 1),
-		status:   common.ClientStatus_Empty,
+		instance:      config.InstanceName,
+		addr:          config.Proxy,
+		httpStatic:    config.HttpStatic,
+		httpTemplates: config.HttpTemplates,
+		caFile:        config.CaPEM,
+		certFile:      config.CertPEM,
+		keyFile:       config.KeyPEM,
+		httpsCertFile: config.HttpsCertPEM,
+		httpsKeyFile:  config.HttpsKeyPEM,
+		httpsAddr:     config.HttpsAddr,
+		end:           make(chan bool, 1),
+		status:        common.ClientStatus_Empty,
 	}
+
 	return client
 }
 
@@ -65,7 +83,6 @@ func (client *Client) GetStatus() string {
 func (client *Client) GetInstance() string {
 	return client.instance
 }
-
 
 func (client *Client) ShutdownBrowser() error {
 	if client.browser == nil {
@@ -148,12 +165,32 @@ func (client *Client) Serve() error {
 			go func() {
 				if err := client.ServeGRPC(); err != nil {
 					client.log.Errorf("error serving GRPC: %v", err)
+					client.Close()
 				}
 				wg.Done()
 			}()
+			if false {
+				go func() {
+					if err := client.ServeHTTPInt(); err != nil {
+						client.log.Errorf("error serving internal HTTP: %v", err)
+						client.Close()
+					}
+					wg.Done()
+				}()
+			}
+
+			if false {
+				go func() {
+					if err := client.ServeHTTPExt(); err != nil {
+						client.log.Errorf("error serving external HTTP: %v", err)
+						client.Close()
+					}
+					wg.Done()
+				}()
+			}
 
 			go func() {
-				time.Sleep(time.Second * 1)
+				time.Sleep(time.Second * 2)
 				if err := client.InitProxy(); err != nil {
 					log.Panicf("cannot initialize proxy: %+v", err)
 					client.CloseServices()
@@ -205,10 +242,74 @@ func (client *Client) ServeGRPC() error {
 	return nil
 }
 
+func (client *Client) ServeHTTPExt() error {
+	httpservmux := http.NewServeMux()
+
+	// static files only from /static
+	fs := http.FileServer(http.Dir(client.httpStatic))
+	httpservmux.Handle("/static/", http.StripPrefix("/static/", fs))
+
+	// the proxy
+	// ignore error because of static url, which must be correct
+	rpURL, _ := url.Parse("http://localhost:80/")
+	proxy := httputil.NewSingleHostReverseProxy(rpURL)
+	proxy.Transport = &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			if client.session == nil {
+				return nil, errors.New("no tls session available")
+			}
+			return client.session.Open()
+		},
+	}
+	httpservmux.Handle("/", proxy)
+
+	client.httpServerExt = &http.Server{Addr: client.httpsAddr, Handler: httpservmux}
+
+	client.log.Infof("launching external HTTPS on %s", client.httpsAddr)
+	err := client.httpServerExt.ListenAndServeTLS(client.httpsCertFile, client.httpsKeyFile)
+	if err != nil {
+		client.httpServerExt = nil
+		return emperror.Wrapf(err, "failed to serve")
+	}
+	client.httpServerExt = nil
+	return nil
+}
+
+func (client *Client) ServeHTTPInt() error {
+	httpservmux := http.NewServeMux()
+	// static files only from /static
+	fs := http.FileServer(http.Dir(client.httpStatic))
+	httpservmux.Handle("/static/", http.StripPrefix("/static/", fs))
+
+	client.httpServerInt = &http.Server{Addr: ":80", Handler: httpservmux}
+
+	client.log.Info("launching HTTP server over TLS connection...")
+	// starting http server
+	if err := client.httpServerInt.Serve(client.session); err != nil {
+		client.httpServerInt = nil
+		return emperror.Wrapf(err, "failed to serve")
+	}
+
+	client.httpServerInt = nil
+	return nil
+}
+
 func (client *Client) CloseServices() error {
 	if client.grpcServer != nil {
 		client.grpcServer.GracefulStop()
 		client.grpcServer = nil
+	}
+
+	if client.httpServerInt != nil {
+		ctx, _ := context.WithTimeout(context.Background(), 2*time.Second)
+		client.httpServerInt.Shutdown(ctx)
+		client.httpServerInt = nil
+	}
+
+	if client.httpServerExt != nil {
+		ctx, _ := context.WithTimeout(context.Background(), 2*time.Second)
+		client.httpServerExt.Shutdown(ctx)
+		client.httpServerExt = nil
 	}
 
 	if client.session != nil {

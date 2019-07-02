@@ -1,8 +1,12 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
+	"fmt"
+	"github.com/bluele/gcache"
 	"github.com/goph/emperror"
 	"github.com/hashicorp/yamux"
 	pb "github.com/je4/bremote/api"
@@ -10,47 +14,71 @@ import (
 	"github.com/mintance/go-uniqid"
 	"github.com/op/go-logging"
 	"google.golang.org/grpc"
+	"html/template"
 	"io/ioutil"
 	"log"
+	"net/http"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
 
 type Controller struct {
-	log        *logging.Logger
-	instance   string
-	addr string
-	caFile     string
-	certFile   string
-	keyFile    string
-	conn       *tls.Conn
-	session    *yamux.Session
-	grpcServer *grpc.Server
-	end        chan bool
-	roots *x509.CertPool
-	certificates *[]tls.Certificate
+	log           *logging.Logger
+	instance      string
+	addr          string
+	httpStatic    string
+	httpTemplates string
+	caFile        string
+	certFile      string
+	keyFile       string
+	conn          *tls.Conn
+	session       *yamux.Session
+	grpcServer    *grpc.Server
+	httpServerInt    *http.Server
+	end           chan bool
+	roots         *x509.CertPool
+	certificates  *[]tls.Certificate
+	kvs           map[string]interface{} // key value store of controller
+	templateCache gcache.Cache
 }
 
-func NewController(instance string, addr string, caFile string, certFile string, keyFile string, log *logging.Logger) *Controller {
+func NewController(config Config, log *logging.Logger) *Controller {
 	controller := &Controller{log: log,
-		instance: instance,
-		addr:addr,
-		caFile:   caFile,
-		certFile: certFile,
-		keyFile:  keyFile,
-		end: make(chan bool, 1),
+		instance:      config.InstanceName,
+		addr:          config.Proxy,
+		httpStatic:    config.HttpStatic,
+		httpTemplates: config.HttpTemplates,
+		caFile:        config.CaPEM,
+		certFile:      config.CertPEM,
+		keyFile:       config.KeyPEM,
+		end:           make(chan bool, 1),
+		kvs:           make(map[string]interface{}),
+		templateCache: gcache.New(100).LRU().Build(),
 	}
 	return controller
 }
 
-func (controller *Controller) GetInstance() (string) {
+func (controller *Controller) GetInstance() string {
 	return controller.instance
 }
 
-func (controller *Controller) GetSessionPtr() (**yamux.Session) {
+func (controller *Controller) GetSessionPtr() **yamux.Session {
 	return &controller.session
 }
 
+func (controller *Controller) SetVar(key string, value interface{}) {
+	controller.kvs[key] = value
+}
+
+func (controller *Controller) GetVar(key string) (interface{}, error) {
+	ret, ok := controller.kvs[key]
+	if !ok {
+		return "", errors.New(fmt.Sprintf("no value found for key %v", key))
+	}
+	return ret, nil
+}
 
 func (controller *Controller) Connect() (err error) {
 
@@ -76,7 +104,7 @@ func (controller *Controller) Connect() (err error) {
 		}
 	}
 
-	if controller.certificates ==  nil {
+	if controller.certificates == nil {
 		certificates := []tls.Certificate{}
 		if controller.certFile != "" {
 			cert, err := tls.LoadX509KeyPair(controller.certFile, controller.keyFile)
@@ -125,6 +153,7 @@ func (controller *Controller) Serve() error {
 		} else {
 			waitTime = time.Second
 
+			// starting 2 services
 			wg.Add(1)
 
 			go func() {
@@ -134,9 +163,19 @@ func (controller *Controller) Serve() error {
 				}
 				wg.Done()
 			}()
+			if false {
+				go func() {
+					time.Sleep(time.Second * 1)
+					if err := controller.ServeHTTPInt(); err != nil {
+						controller.log.Errorf("error serving HTTP: %v", err)
+						controller.Close()
+					}
+					wg.Done()
+				}()
+			}
 
 			go func() {
-				time.Sleep(time.Second * 1)
+				time.Sleep(time.Second * 2)
 				if err := controller.InitProxy(); err != nil {
 					controller.log.Errorf("cannot initialize proxy: %+v", err)
 					controller.Close()
@@ -179,6 +218,59 @@ func (controller *Controller) GetClients() ([]common.ClientInfo, error) {
 	return clients, nil
 }
 
+func (controller *Controller) ServeHTTPInt() error {
+	httpservmux := http.NewServeMux()
+	// static files only from /static
+	fs := http.FileServer(http.Dir(controller.httpStatic))
+	httpservmux.Handle("/static/", http.StripPrefix("/static/", fs))
+	httpservmux.HandleFunc("/template/", func(w http.ResponseWriter, r *http.Request) {
+		// get rid of /template and prefix with httpFolder
+		file := filepath.Join(controller.httpTemplates, strings.TrimPrefix("/template", filepath.Clean(r.URL.Path)))
+
+		// get source instance
+		source := r.Header.Get("sourceinstance")
+
+		key := fmt.Sprintf("%s-%s", source, filepath.Base(file))
+		data, err := controller.GetVar(key)
+		if err != nil {
+			controller.log.Errorf("cannot execute template without data: %v", err)
+			http.Error(w, fmt.Sprintf("cannot execute template without data: %v", err), http.StatusNotFound)
+			return
+		}
+		var tmpl *template.Template
+		h, err := controller.templateCache.Get(key)
+		if err != nil {
+			tmpl, err = template.ParseFiles(file)
+			if err != nil {
+				controller.log.Errorf("error in template %v: %v", file, err)
+				http.Error(w, fmt.Sprintf("error in template %v: %v", file, err), http.StatusUnprocessableEntity)
+				return
+			}
+			controller.templateCache.Set(key, tmpl)
+		} else {
+			tmpl = h.(*template.Template)
+		}
+		err = tmpl.Execute(w, data)
+		if err != nil {
+			controller.log.Errorf("error in data for template %v: %v", file, err)
+			http.Error(w, fmt.Sprintf("error in data for template %v: %v", file, err), http.StatusUnprocessableEntity)
+			return
+		}
+	})
+
+	controller.httpServerInt = &http.Server{Addr: "localhost:80", Handler: httpservmux}
+
+	controller.log.Info("launching HTTP server over TLS connection...")
+	// starting http server
+	if err := controller.httpServerInt.Serve(controller.session); err != nil {
+		controller.httpServerInt = nil
+		return emperror.Wrapf(err, "failed to serve")
+	}
+
+	controller.httpServerInt = nil
+
+	return nil
+}
 
 func (controller *Controller) ServeGRPC() error {
 	// create a server instance
@@ -204,6 +296,11 @@ func (controller *Controller) Close() error {
 	if controller.grpcServer != nil {
 		controller.grpcServer.GracefulStop()
 		controller.grpcServer = nil
+	}
+	if controller.httpServerInt != nil {
+		ctx, _ := context.WithTimeout(context.Background(), 2*time.Second)
+		controller.httpServerInt.Shutdown(ctx)
+		controller.httpServerInt = nil
 	}
 
 	if controller.session != nil {

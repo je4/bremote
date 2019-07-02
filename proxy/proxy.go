@@ -18,7 +18,7 @@ the proxy manages all client and controller sessions
 type Proxy struct {
 	log      *logging.Logger
 	instance string
-	addr string
+	addr     string
 	caFile   string
 	certFile string
 	keyFile  string
@@ -31,13 +31,13 @@ type Proxy struct {
 /*
 create a new Proxy instance
 */
-func NewProxy(instanceName string, addr string, caFile string, certFile string, keyFile string, log *logging.Logger) (*Proxy, error) {
+func NewProxy(config Config, log *logging.Logger) (*Proxy, error) {
 	proxy := &Proxy{log: log,
-		instance: instanceName,
-		addr:addr,
-		caFile:   caFile,
-		certFile: certFile,
-		keyFile:  keyFile,
+		instance: config.InstanceName,
+		addr:     config.TLSAddr,
+		caFile:   config.CaPEM,
+		certFile: config.CertPEM,
+		keyFile:  config.KeyPEM,
 		sessions: make(map[string]*ProxySession)}
 	if err := proxy.Init(); err != nil {
 		return nil, emperror.Wrap(err, "cannot connect")

@@ -43,6 +43,7 @@ d/uNLKFokMQMqVyV8hSWwE/D78oED5f/eoJ7UAEDh2jhLtZaodFN7nYnj9MOCqmE
 -----END CERTIFICATE-----`
 
 func main() {
+	configFile := flag.String("cfg", "", "config file location")
 	logFile := flag.String("logfile", "", "log file location")
 	logLevel := flag.String("loglevel", "DEBUG", "LOGLEVEL: CRITICAL|ERROR|WARNING|NOTICE|INFO|DEBUG")
 	instanceName := flag.String("instance", "", "instance name")
@@ -50,21 +51,41 @@ func main() {
 	keyPem := flag.String("key", "", "tls client key file in PEM format")
 	caPem := flag.String("ca", "", "tls root certificate file in PEM format")
 	addr := flag.String("proxy", "localhost:7777", "proxy addr:port")
+	httpStatic := flag.String("httpstatic", "", "folder with static files")
+	httpTemplates := flag.String("httptemplates", "", "folder with templates")
 
 	flag.Parse()
-	if *instanceName == "" {
+
+	var config Config
+	if *configFile != "" {
+		config = LoadConfig(*configFile)
+	} else {
+		config = Config{
+			Logfile: *logFile,
+			Loglevel: *logLevel,
+			InstanceName: *instanceName,
+			Proxy: *addr,
+			CertPEM: *certPem,
+			KeyPEM: *keyPem,
+			CaPEM: *caPem,
+			HttpStatic: *httpStatic,
+			HttpTemplates: *httpTemplates,
+		}
+	}
+
+	if config.InstanceName == "" {
 		h, err := os.Hostname()
 		if err != nil {
 			log.Panic("cannot get hostname")
 		}
-		instanceName = &h
+		config.InstanceName = "controller-"+h
 	}
 
 	// create logger instance
-	log, lf := common.CreateLogger("controller-"+*instanceName, *logFile, *logLevel)
+	log, lf := common.CreateLogger(config.InstanceName, config.Logfile, config.Loglevel)
 	defer lf.Close()
 
-	controller := NewController(*instanceName, *addr, *caPem, *certPem, *keyPem, log)
+	controller := NewController(config, log)
 
 	go func() {
 		sigint := make(chan os.Signal, 1)

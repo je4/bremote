@@ -1,0 +1,7 @@
+logfile = "" # log file location
+loglevel = "DEBUG" # CRITICAL|ERROR|WARNING|NOTICE|INFO|DEBUG
+instancename = "proxy" # instance name
+certpem = "C:/daten/go/certs/bremote_server.pem" # tls server certificate file in PEM format
+keypem = "C:/daten/go/certs/bremote_server.key" # tls server key file in PEM format
+capem = "C:/daten/go/certs/bremote_ca.pem" # tls root certificate file in PEM format
+tlsaddr = "localhost:7777" # listen address for incoming raw tls connections
