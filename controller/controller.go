@@ -13,11 +13,14 @@ import (
 	"github.com/je4/bremote/common"
 	"github.com/mintance/go-uniqid"
 	"github.com/op/go-logging"
+	"github.com/soheilhy/cmux"
 	"google.golang.org/grpc"
 	"html/template"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -25,23 +28,26 @@ import (
 )
 
 type Controller struct {
-	log           *logging.Logger
-	instance      string
-	addr          string
-	httpStatic    string
-	httpTemplates string
-	caFile        string
-	certFile      string
-	keyFile       string
-	conn          *tls.Conn
-	session       *yamux.Session
-	grpcServer    *grpc.Server
-	httpServerInt    *http.Server
-	end           chan bool
-	roots         *x509.CertPool
-	certificates  *[]tls.Certificate
-	kvs           map[string]interface{} // key value store of controller
-	templateCache gcache.Cache
+	log                *logging.Logger
+	instance           string
+	addr               string
+	httpStatic         string
+	httpTemplates      string
+	caFile             string
+	certFile           string
+	keyFile            string
+	conn               *tls.Conn
+	session            *yamux.Session
+	grpcServer         *grpc.Server
+	httpServerInt      *http.Server
+	cmuxServer         *cmux.CMux
+	end                chan bool
+	roots              *x509.CertPool
+	certificates       *[]tls.Certificate
+	kvs                map[string]interface{} // key value store of controller
+	templateCache      gcache.Cache
+	templateDelimLeft  string
+	templateDelimRight string
 }
 
 func NewController(config Config, log *logging.Logger) *Controller {
@@ -56,6 +62,8 @@ func NewController(config Config, log *logging.Logger) *Controller {
 		end:           make(chan bool, 1),
 		kvs:           make(map[string]interface{}),
 		templateCache: gcache.New(100).LRU().Build(),
+		templateDelimLeft:config.TemplateDelimLeft,
+		templateDelimRight:config.TemplateDelimRight,
 	}
 	return controller
 }
@@ -153,26 +161,42 @@ func (controller *Controller) Serve() error {
 		} else {
 			waitTime = time.Second
 
+			// we want to create different services for HTTP and GRPC (HTTP/2)
+
+			// create a new muxer on yamux listener
+			cs := cmux.New(controller.session)
+			controller.cmuxServer = &cs
+
+			// first get http1
+			httpl := (*controller.cmuxServer).Match(cmux.HTTP1Fast())
+			// the rest should be grpc
+			grpcl := (*controller.cmuxServer).Match(cmux.Any())
+
 			// starting 2 services
-			wg.Add(1)
+			wg.Add(3)
 
 			go func() {
-				if err := controller.ServeGRPC(); err != nil {
+				if err := controller.ServeGRPC(grpcl); err != nil {
 					controller.log.Errorf("error serving GRPC: %v", err)
 					controller.Close()
 				}
 				wg.Done()
 			}()
-			if false {
-				go func() {
-					time.Sleep(time.Second * 1)
-					if err := controller.ServeHTTPInt(); err != nil {
-						controller.log.Errorf("error serving HTTP: %v", err)
-						controller.Close()
-					}
-					wg.Done()
-				}()
-			}
+			go func() {
+				if err := controller.ServeHTTPInt(httpl); err != nil {
+					controller.log.Errorf("error serving HTTP: %v", err)
+					controller.Close()
+				}
+				wg.Done()
+			}()
+
+			go func() {
+				if err := controller.ServeCmux(); err != nil {
+					controller.log.Errorf("error serving cmux: %v", err)
+					controller.Close()
+				}
+				wg.Done()
+			}()
 
 			go func() {
 				time.Sleep(time.Second * 2)
@@ -218,29 +242,52 @@ func (controller *Controller) GetClients() ([]common.ClientInfo, error) {
 	return clients, nil
 }
 
-func (controller *Controller) ServeHTTPInt() error {
+func (controller *Controller) ServeCmux() error {
+	if err := (*controller.cmuxServer).Serve(); err != nil {
+		controller.cmuxServer = nil
+		return emperror.Wrap(err, "cmux closed")
+	}
+	controller.cmuxServer = nil
+	return nil
+}
+
+func (controller *Controller) ServeHTTPInt(listener net.Listener) error {
 	httpservmux := http.NewServeMux()
 	// static files only from /static
 	fs := http.FileServer(http.Dir(controller.httpStatic))
 	httpservmux.Handle("/static/", http.StripPrefix("/static/", fs))
-	httpservmux.HandleFunc("/template/", func(w http.ResponseWriter, r *http.Request) {
+	pattern := fmt.Sprintf("/%s/static/", controller.GetInstance())
+	httpservmux.Handle(pattern, http.StripPrefix(pattern, fs))
+
+	hf := func(w http.ResponseWriter, r *http.Request) {
 		// get rid of /template and prefix with httpFolder
-		file := filepath.Join(controller.httpTemplates, strings.TrimPrefix("/template", filepath.Clean(r.URL.Path)))
+		str := filepath.Clean(r.URL.Path)
+		str = strings.TrimPrefix(str, string(os.PathSeparator)+controller.GetInstance())
+		str = strings.TrimPrefix(str, string(os.PathSeparator)+"templates")
+		file := filepath.Join(controller.httpTemplates, str)
 
 		// get source instance
-		source := r.Header.Get("sourceinstance")
+		source := r.Header.Get("X-Source-Instance")
 
 		key := fmt.Sprintf("%s-%s", source, filepath.Base(file))
-		data, err := controller.GetVar(key)
+		v, err := controller.GetVar(key)
 		if err != nil {
 			controller.log.Errorf("cannot execute template without data: %v", err)
 			http.Error(w, fmt.Sprintf("cannot execute template without data: %v", err), http.StatusNotFound)
 			return
 		}
+		data := v.(map[string]interface{})
+
 		var tmpl *template.Template
 		h, err := controller.templateCache.Get(key)
 		if err != nil {
-			tmpl, err = template.ParseFiles(file)
+			tpldata, err := ioutil.ReadFile(file)
+			if err != nil {
+				controller.log.Errorf("error reading %v: %v", file, err)
+				http.Error(w, fmt.Sprintf("error reading %v: %v", file, err), http.StatusNotFound)
+				return
+			}
+			tmpl, err = template.New(file).Delims(controller.templateDelimLeft, controller.templateDelimRight).Parse(string(tpldata)) //ParseFiles(file)
 			if err != nil {
 				controller.log.Errorf("error in template %v: %v", file, err)
 				http.Error(w, fmt.Sprintf("error in template %v: %v", file, err), http.StatusUnprocessableEntity)
@@ -250,19 +297,29 @@ func (controller *Controller) ServeHTTPInt() error {
 		} else {
 			tmpl = h.(*template.Template)
 		}
+
 		err = tmpl.Execute(w, data)
 		if err != nil {
 			controller.log.Errorf("error in data for template %v: %v", file, err)
 			http.Error(w, fmt.Sprintf("error in data for template %v: %v", file, err), http.StatusUnprocessableEntity)
 			return
 		}
-	})
+	}
+	pattern = fmt.Sprintf("/%s/templates/", controller.GetInstance())
+	httpservmux.HandleFunc(pattern, hf)
 
-	controller.httpServerInt = &http.Server{Addr: "localhost:80", Handler: httpservmux}
+	lr := func(handler http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			controller.log.Infof("[%s] %s %s %s\n", controller.GetInstance(), r.RemoteAddr, r.Method, r.URL)
+			handler.ServeHTTP(w, r)
+		})
+	}
+
+	controller.httpServerInt = &http.Server{Addr: "localhost:80", Handler: lr(httpservmux)}
 
 	controller.log.Info("launching HTTP server over TLS connection...")
 	// starting http server
-	if err := controller.httpServerInt.Serve(controller.session); err != nil {
+	if err := controller.httpServerInt.Serve(listener); err != nil {
 		controller.httpServerInt = nil
 		return emperror.Wrapf(err, "failed to serve")
 	}
@@ -272,7 +329,7 @@ func (controller *Controller) ServeHTTPInt() error {
 	return nil
 }
 
-func (controller *Controller) ServeGRPC() error {
+func (controller *Controller) ServeGRPC(listener net.Listener) error {
 	// create a server instance
 	server := NewControllerServiceServer(controller, controller.log)
 
@@ -284,7 +341,7 @@ func (controller *Controller) ServeGRPC() error {
 
 	// start the gRPC erver
 	controller.log.Info("launching gRPC server over TLS connection...")
-	if err := controller.grpcServer.Serve(controller.session); err != nil {
+	if err := controller.grpcServer.Serve(listener); err != nil {
 		controller.grpcServer = nil
 		return emperror.Wrapf(err, "failed to serve")
 	}

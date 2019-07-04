@@ -6,16 +6,18 @@ import (
 )
 
 type Config struct {
-	Logfile       string
-	Loglevel      string
-	InstanceName  string
-	Proxy         string
-	CertPEM       string
-	KeyPEM        string
-	CaPEM         string
-	HttpStatic    string
-	HttpTemplates string
-	TLSAddr       string
+	Logfile             string
+	Loglevel            string
+	InstanceName        string
+	Proxy               string
+	CertPEM             string
+	KeyPEM              string
+	CaPEM               string
+	HttpStatic          string
+	HttpTemplates       string
+	TLSAddr             string
+	TemplateDelimLeft  string
+	TemplateDelimRight string
 }
 
 func LoadConfig(filepath string) Config {

@@ -7,4 +7,5 @@ keypem = "C:/daten/go/certs/bremote_client.key" # tls client key file in PEM for
 capem = "C:/daten/go/certs/bremote_ca.pem" # tls root certificate file in PEM format
 httpstatic = "C:/daten/go/src/github.com/je4/bremote/controller/data/static" # folder for static html files
 httptemplates = "C:/daten/go/src/github.com/je4/bremote/controller/data/templates" # folder for html templates
-
+templatedelimleft = "<<"
+templatedelimright = ">>"

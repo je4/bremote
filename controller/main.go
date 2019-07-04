@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"github.com/je4/bremote/api"
 	"github.com/je4/bremote/common"
@@ -122,6 +123,14 @@ func main() {
 
 		cw := api.NewClientWrapper(*instanceName, &controller.session)
 		for _, client := range clients {
+
+			data := map[string]interface{}{}
+			err := json.Unmarshal([]byte(`{"title":"Your are Client01"}`), &data)
+			if err != nil {
+				panic("invalid metadata")
+			}
+			controller.SetVar(client.InstanceName+"-test.tpl", data)
+
 			/* not necessary because GetClients was called withStatus
 			traceId := uniqid.New(uniqid.Params{"traceid_", false})
 			ret, err := cw.Ping(traceId, client.InstanceName)

@@ -3,6 +3,8 @@ package common
 import (
 	"context"
 	"errors"
+	"strings"
+
 	//	"github.com/goph/emperror"
 	"github.com/op/go-logging"
 	"google.golang.org/grpc/metadata"
@@ -12,6 +14,18 @@ import (
 var _logformat = logging.MustStringFormatter(
 	`%{time:2006-01-02T15:04:05.000} %{module}::%{shortfunc} [%{shortfile}] > %{level:.5s} - %{message}`,
 )
+
+func SingleJoiningSlash(a, b string) string {
+	aslash := strings.HasSuffix(a, "/")
+	bslash := strings.HasPrefix(b, "/")
+	switch {
+	case aslash && bslash:
+		return a + b[1:]
+	case !aslash && !bslash:
+		return a + "/" + b
+	}
+	return a + b
+}
 
 func CreateLogger(module string, logfile string, loglevel string) (log *logging.Logger, lf *os.File) {
 	log = logging.MustGetLogger(module)
