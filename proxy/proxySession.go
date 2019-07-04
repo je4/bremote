@@ -5,28 +5,33 @@ import (
 	"errors"
 	"fmt"
 	"github.com/goph/emperror"
+	"github.com/gorilla/websocket"
 	"github.com/hashicorp/yamux"
+	pb "github.com/je4/bremote/api"
+	"github.com/je4/bremote/common"
 	"github.com/je4/grpc-proxy/proxy"
 	"github.com/op/go-logging"
+	"github.com/soheilhy/cmux"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	pb "github.com/je4/bremote/api"
-	"github.com/je4/bremote/common"
+	"log"
 	"net"
+	"net/http"
 	"sync"
 )
 
-
 type ProxySession struct {
-	log         *logging.Logger
-	instance    string
-	proxy       *Proxy
-	sessionType common.SessionType
-	service     *ProxyServiceServer
-	grpcServer  *grpc.Server
-	session     *yamux.Session
+	log           *logging.Logger
+	instance      string
+	proxy         *Proxy
+	sessionType   common.SessionType
+	service       *ProxyServiceServer
+	grpcServer    *grpc.Server
+	httpServerInt *http.Server
+	cmuxServer    *cmux.CMux
+	session       *yamux.Session
 }
 
 func NewProxySession(instance string, session *yamux.Session, proxy *Proxy, log *logging.Logger) *ProxySession {
@@ -36,12 +41,35 @@ func NewProxySession(instance string, session *yamux.Session, proxy *Proxy, log 
 
 func (ps *ProxySession) Serve() error {
 
-	var wg sync.WaitGroup
+	// we want to create different services for HTTP and GRPC (HTTP/2)
 
-	wg.Add(1)
+	// create a new muxer on yamux listener
+	cs := cmux.New(ps.session)
+	ps.cmuxServer = &cs
+
+	// first get http1
+	httpl := (*ps.cmuxServer).Match(cmux.HTTP1Fast())
+	// the rest should be grpc
+	grpcl := (*ps.cmuxServer).Match(cmux.Any())
+
+	var wg sync.WaitGroup
+	wg.Add(3)
 	go func() {
-		if err := ps.ServeGRPC(); err != nil {
+		if err := ps.ServeGRPC(grpcl); err != nil {
 			ps.log.Errorf("error serving GRPC for instance %v: %v", ps.GetInstance(), err)
+		}
+		wg.Done()
+	}()
+	go func() {
+		if err := ps.ServeHTTPInt(httpl); err != nil {
+			ps.log.Errorf("error serving http for instance %v: %v", ps.GetInstance(), err)
+		}
+		wg.Done()
+	}()
+
+	go func() {
+		if err := ps.ServeCmux(); err != nil {
+			ps.log.Errorf("error serving for instance %v: %v", ps.GetInstance(), err)
 		}
 		wg.Done()
 	}()
@@ -54,7 +82,59 @@ func (ps *ProxySession) Serve() error {
 	return nil
 }
 
-func (ps *ProxySession) ServeGRPC() error {
+var upgrader = websocket.Upgrader{} // use default options
+
+func wsEcho(w http.ResponseWriter, r *http.Request) {
+	c, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Print("upgrade:", err)
+		return
+	}
+	defer c.Close()
+	for {
+		mt, message, err := c.ReadMessage()
+		if err != nil {
+			log.Println("read:", err)
+			break
+		}
+		log.Printf("recv: %s", message)
+		err = c.WriteMessage(mt, message)
+		if err != nil {
+			log.Println("write:", err)
+			break
+		}
+	}
+}
+
+func (ps *ProxySession) ServeHTTPInt(listener net.Listener) error {
+	httpservmux := http.NewServeMux()
+
+	// websocket...
+	httpservmux.HandleFunc("/echo/", wsEcho)
+
+	ps.httpServerInt = &http.Server{Addr: ":80", Handler: httpservmux}
+
+	ps.log.Info("launching HTTP server over TLS connection...")
+	// starting http server
+	if err := ps.httpServerInt.Serve(listener); err != nil {
+		ps.httpServerInt = nil
+		return emperror.Wrapf(err, "failed to serve")
+	}
+
+	ps.httpServerInt = nil
+	return nil
+}
+
+func (ps *ProxySession) ServeCmux() error {
+	if err := (*ps.cmuxServer).Serve(); err != nil {
+		ps.cmuxServer = nil
+		return emperror.Wrap(err, "cmux closed")
+	}
+	ps.cmuxServer = nil
+	return nil
+}
+
+func (ps *ProxySession) ServeGRPC(listener net.Listener) error {
 
 	director := func(ctx context.Context, fullMethodName string) (context.Context, *grpc.ClientConn, error) {
 		// Make sure we never forward internal services.
@@ -75,7 +155,7 @@ func (ps *ProxySession) ServeGRPC() error {
 		}
 
 		// make sure, that we transfer the metadata to the target client
-		ctx = metadata.AppendToOutgoingContext(ctx, "sourceInstance", sourceInstance, "targetInstance", targetInstance, "traceId", traceId )
+		ctx = metadata.AppendToOutgoingContext(ctx, "sourceInstance", sourceInstance, "targetInstance", targetInstance, "traceId", traceId)
 
 		conn, err := grpc.DialContext(ctx, ":7777",
 			grpc.WithInsecure(),
@@ -86,7 +166,7 @@ func (ps *ProxySession) ServeGRPC() error {
 				return sess.session.Open()
 			}),
 			grpc.WithCodec(proxy.Codec()),
-//			grpc.WithDefaultCallOptions(grpc.ForceCodec(proxy.Codec())),
+			//			grpc.WithDefaultCallOptions(grpc.ForceCodec(proxy.Codec())),
 		)
 		if err != nil {
 			return nil, nil, status.Errorf(codes.Internal, "[%v] error dialing %v on session %v for %v", traceId, ":7777", sess.GetInstance(), fullMethodName)
@@ -108,7 +188,7 @@ func (ps *ProxySession) ServeGRPC() error {
 
 	// start the gRPC erver
 	ps.proxy.log.Info("launching gRPC server over TLS connection...")
-	if err := ps.grpcServer.Serve(ps.session); err != nil {
+	if err := ps.grpcServer.Serve(listener); err != nil {
 		ps.proxy.log.Errorf("failed to serve: %v", err)
 		return emperror.Wrapf(err, "failed to serve")
 	}
@@ -124,7 +204,7 @@ func (ps *ProxySession) GetInstance() string {
 	return ps.instance
 }
 
-func (ps *ProxySession) GetSessionPtr() **yamux.Session{
+func (ps *ProxySession) GetSessionPtr() **yamux.Session {
 	return &ps.session
 }
 

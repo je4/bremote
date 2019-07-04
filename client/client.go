@@ -12,6 +12,7 @@ import (
 	"github.com/je4/bremote/common"
 	"github.com/mintance/go-uniqid"
 	"github.com/op/go-logging"
+	"github.com/soheilhy/cmux"
 	"google.golang.org/grpc"
 	"io/ioutil"
 	"log"
@@ -40,6 +41,7 @@ type Client struct {
 	grpcServer    *grpc.Server
 	httpServerInt *http.Server
 	httpServerExt *http.Server
+	cmuxServer    *cmux.CMux
 	end           chan bool
 	browser       *browser.Browser
 	status        string
@@ -160,34 +162,50 @@ func (client *Client) Serve() error {
 		} else {
 			waitTime = time.Second
 
-			wg.Add(1)
+			// we want to create different services for HTTP and GRPC (HTTP/2)
+
+			// create a new muxer on yamux listener
+			cs := cmux.New(client.session)
+			client.cmuxServer = &cs
+
+			// first get http1
+			httpl := (*client.cmuxServer).Match(cmux.HTTP1Fast())
+			// the rest should be grpc
+			grpcl := (*client.cmuxServer).Match(cmux.Any())
+
+
+			wg.Add(4)
 
 			go func() {
-				if err := client.ServeGRPC(); err != nil {
+				if err := client.ServeGRPC(grpcl); err != nil {
 					client.log.Errorf("error serving GRPC: %v", err)
 					client.Close()
 				}
 				wg.Done()
 			}()
-			if false {
 				go func() {
-					if err := client.ServeHTTPInt(); err != nil {
+					if err := client.ServeHTTPInt(httpl); err != nil {
 						client.log.Errorf("error serving internal HTTP: %v", err)
 						client.Close()
 					}
 					wg.Done()
 				}()
-			}
 
-			if false {
-				go func() {
-					if err := client.ServeHTTPExt(); err != nil {
-						client.log.Errorf("error serving external HTTP: %v", err)
-						client.Close()
-					}
-					wg.Done()
-				}()
-			}
+			go func() {
+				if err := client.ServeHTTPExt(); err != nil {
+					client.log.Errorf("error serving external HTTP: %v", err)
+					client.Close()
+				}
+				wg.Done()
+			}()
+
+			go func() {
+				if err := client.ServeCmux(); err != nil {
+					client.log.Errorf("error serving cmux: %v", err)
+					client.Close()
+				}
+				wg.Done()
+			}()
 
 			go func() {
 				time.Sleep(time.Second * 2)
@@ -224,7 +242,7 @@ func (client *Client) InitProxy() error {
 	return nil
 }
 
-func (client *Client) ServeGRPC() error {
+func (client *Client) ServeGRPC(listener net.Listener) error {
 	// create a server instance
 	server := NewClientServiceServer(client, client.log)
 
@@ -236,7 +254,7 @@ func (client *Client) ServeGRPC() error {
 
 	// start the gRPC erver
 	client.log.Info("launching gRPC server over TLS connection...")
-	if err := client.grpcServer.Serve(client.session); err != nil {
+	if err := client.grpcServer.Serve(listener); err != nil {
 		return emperror.Wrapf(err, "failed to serve")
 	}
 	return nil
@@ -275,7 +293,7 @@ func (client *Client) ServeHTTPExt() error {
 	return nil
 }
 
-func (client *Client) ServeHTTPInt() error {
+func (client *Client) ServeHTTPInt(listener net.Listener) error {
 	httpservmux := http.NewServeMux()
 	// static files only from /static
 	fs := http.FileServer(http.Dir(client.httpStatic))
@@ -285,7 +303,7 @@ func (client *Client) ServeHTTPInt() error {
 
 	client.log.Info("launching HTTP server over TLS connection...")
 	// starting http server
-	if err := client.httpServerInt.Serve(client.session); err != nil {
+	if err := client.httpServerInt.Serve(listener); err != nil {
 		client.httpServerInt = nil
 		return emperror.Wrapf(err, "failed to serve")
 	}
@@ -293,6 +311,16 @@ func (client *Client) ServeHTTPInt() error {
 	client.httpServerInt = nil
 	return nil
 }
+
+func (client *Client) ServeCmux() error {
+	if err := (*client.cmuxServer).Serve(); err != nil {
+		client.cmuxServer = nil
+		return emperror.Wrap(err, "cmux closed")
+	}
+	client.cmuxServer = nil
+	return nil
+}
+
 
 func (client *Client) CloseServices() error {
 	if client.grpcServer != nil {
@@ -310,6 +338,10 @@ func (client *Client) CloseServices() error {
 		ctx, _ := context.WithTimeout(context.Background(), 2*time.Second)
 		client.httpServerExt.Shutdown(ctx)
 		client.httpServerExt = nil
+	}
+
+	if client.cmuxServer != nil {
+		client.cmuxServer = nil
 	}
 
 	if client.session != nil {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/golang/protobuf/ptypes/empty"
-	"github.com/je4/bremote/api"
 	pb "github.com/je4/bremote/api"
 	"github.com/je4/bremote/common"
 	"github.com/mintance/go-uniqid"
@@ -69,7 +68,7 @@ func (pss ProxyServiceServer) Init(ctx context.Context, param *pb.InitParam) (*e
 			if session.GetSessionType() != common.SessionType_Controller {
 				continue
 			}
-			cw := api.NewControllerWrapper(name, session.GetSessionPtr())
+			cw := pb.NewControllerWrapper(name, session.GetSessionPtr())
 
 			traceId = uniqid.New(uniqid.Params{"traceid_", false})
 			pss.log.Infof("[%v] announcing %v to %v", traceId, client, name)
