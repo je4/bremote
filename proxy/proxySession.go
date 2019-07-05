@@ -22,6 +22,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"regexp"
+	"strings"
 	"sync"
 )
 
@@ -109,23 +110,18 @@ func wsEcho(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (ps *ProxySession) ServeHTTPInt(listener net.Listener) error {
-	httpservmux := http.NewServeMux()
-
-	// websocket...
-	httpservmux.HandleFunc("/echo/", wsEcho)
-
-	// the proxy
-	// ignore error because of static url, which must be correct
+func (ps *ProxySession) ProxyDirector() (func(req *http.Request)){
 	target, _ := url.Parse("http://localhost:80/")
 	targetQuery := target.RawQuery
-	r := regexp.MustCompile(`/([^/]+)/`)
+	r := regexp.MustCompile(`^/([^/]+)/`)
+
 	director := func(req *http.Request) {
 		req.URL.Scheme = target.Scheme
 		//req.URL.Host = target.Host
 		matches := r.FindStringSubmatch(req.URL.Path)
 		if len(matches) >= 2 {
 			req.URL.Host = matches[1] + ":80"
+			req.URL.Path = strings.TrimPrefix(req.URL.Path, "/"+matches[1])
 		} else {
 			req.URL.Host = target.Host
 		}
@@ -141,8 +137,20 @@ func (ps *ProxySession) ServeHTTPInt(listener net.Listener) error {
 			req.Header.Set("User-Agent", "")
 		}
 		req.Header.Set("X-Source-Instance", ps.GetInstance())
+		ps.log.Debugf("%v -> %v", ps.GetInstance(), req.URL.String())
 	}
-	proxy := &httputil.ReverseProxy{Director: director}
+	return director
+}
+
+func (ps *ProxySession) ServeHTTPInt(listener net.Listener) error {
+	httpservmux := http.NewServeMux()
+
+	// websocket...
+	httpservmux.HandleFunc("/echo/", wsEcho)
+
+	// the proxy
+	// ignore error because of static url, which must be correct
+	proxy := &httputil.ReverseProxy{Director: ps.ProxyDirector()}
 
 	r2 := regexp.MustCompile(`^([^:]+):`)
 	proxy.Transport = &http.Transport{
@@ -154,6 +162,7 @@ func (ps *ProxySession) ServeHTTPInt(listener net.Listener) error {
 			target := matches[1]
 			sess, err := ps.proxy.GetSession(target)
 			if err != nil {
+				ps.log.Errorf("invalid target %s from address %s: %v", target, addr, err)
 				return nil, emperror.Wrapf(err, "invalid target %s from address %s", target, addr)
 			}
 			return sess.session.Open()

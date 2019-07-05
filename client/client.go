@@ -5,7 +5,9 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"github.com/goph/emperror"
+	"github.com/gorilla/mux"
 	"github.com/hashicorp/yamux"
 	pb "github.com/je4/bremote/api"
 	"github.com/je4/bremote/browser"
@@ -20,6 +22,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 )
@@ -260,18 +263,12 @@ func (client *Client) ServeGRPC(listener net.Listener) error {
 	return nil
 }
 
-func (client *Client) ServeHTTPExt() error {
-	httpservmux := http.NewServeMux()
-
-	// static files only from /static
-	fs := http.FileServer(http.Dir(client.httpStatic))
-	httpservmux.Handle("/static/", http.StripPrefix("/static/", fs))
-
-	// the proxy
-	// ignore error because of static url, which must be correct
+func (client *Client) getProxyDirector() (func(req *http.Request)) {
 	target, _ := url.Parse("http://localhost:80/")
 	targetQuery := target.RawQuery
 	director := func(req *http.Request) {
+//		vars := mux.Vars(req)
+//		t := vars["target"]
 		req.URL.Scheme = target.Scheme
 		req.URL.Host = target.Host
 		req.URL.Path = common.SingleJoiningSlash(target.Path, req.URL.Path)
@@ -286,7 +283,20 @@ func (client *Client) ServeHTTPExt() error {
 		}
 		req.Header.Set("X-Source-Instance", client.GetInstance())
 	}
-	proxy := &httputil.ReverseProxy{Director: director}
+
+	return director
+}
+
+func (client *Client) ServeHTTPExt() error {
+	r := mux.NewRouter()
+
+	// static files only from /static
+	fs := http.FileServer(http.Dir(client.httpStatic))
+	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", fs))
+
+	// the proxy
+	// ignore error because of static url, which must be correct
+	proxy := &httputil.ReverseProxy{Director: client.getProxyDirector()}
 	proxy.Transport = &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			if client.session == nil {
@@ -295,12 +305,44 @@ func (client *Client) ServeHTTPExt() error {
 			return client.session.Open()
 		},
 	}
-	httpservmux.Handle("/", proxy)
+	r.PathPrefix("/{target}/").Handler(proxy)
 
-	client.httpServerExt = &http.Server{Addr: client.httpsAddr, Handler: httpservmux}
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			client.log.Infof(r.RequestURI)
+			next.ServeHTTP(w, r)
+		})
+	})
+
+	err := r.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
+		pathTemplate, err := route.GetPathTemplate()
+		if err == nil {
+			fmt.Println("ROUTE:", pathTemplate)
+		}
+		pathRegexp, err := route.GetPathRegexp()
+		if err == nil {
+			fmt.Println("Path regexp:", pathRegexp)
+		}
+		queriesTemplates, err := route.GetQueriesTemplates()
+		if err == nil {
+			fmt.Println("Queries templates:", strings.Join(queriesTemplates, ","))
+		}
+		queriesRegexps, err := route.GetQueriesRegexp()
+		if err == nil {
+			fmt.Println("Queries regexps:", strings.Join(queriesRegexps, ","))
+		}
+		methods, err := route.GetMethods()
+		if err == nil {
+			fmt.Println("Methods:", strings.Join(methods, ","))
+		}
+		fmt.Println()
+		return nil
+	})
+
+	client.httpServerExt = &http.Server{Addr: client.httpsAddr, Handler: r}
 
 	client.log.Infof("launching external HTTPS on %s", client.httpsAddr)
-	err := client.httpServerExt.ListenAndServeTLS(client.httpsCertFile, client.httpsKeyFile)
+	err = client.httpServerExt.ListenAndServeTLS(client.httpsCertFile, client.httpsKeyFile)
 	if err != nil {
 		client.httpServerExt = nil
 		return emperror.Wrapf(err, "failed to serve")

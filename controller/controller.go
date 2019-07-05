@@ -94,7 +94,7 @@ func (controller *Controller) SetVar(key string, value interface{}) {
 }
 
 func (controller *Controller) DeleteVar(key string) {
-	delete( controller.kvs, key)
+	delete(controller.kvs, key)
 }
 
 func (controller *Controller) GetVar(key string) (interface{}, error) {
@@ -277,7 +277,6 @@ func (controller *Controller) ServeCmux() error {
 	return nil
 }
 
-
 func (controller *Controller) ServeHTTPExt() error {
 	r := mux.NewRouter()
 	r.HandleFunc("/", dummy)
@@ -334,30 +333,7 @@ func (controller *Controller) ServeHTTPExt() error {
 	return nil
 }
 
-func (controller *Controller) ServeHTTPInt(listener net.Listener) error {
-	r := mux.NewRouter()
-
-	fs := http.FileServer(http.Dir(controller.httpStatic))
-	r.Handle("/static/", http.StripPrefix("/static/", fs))
-	pattern := fmt.Sprintf("/%s/static/", controller.GetInstance())
-	r.Handle(pattern, http.StripPrefix(pattern, fs))
-
-	r.HandleFunc("/", dummy)
-	r.HandleFunc("/kvstore", controller.RestKVStoreList())
-	r.HandleFunc("/kvstore/{client}", controller.RestKVStoreClientList())
-	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValue()).Methods("GET")
-	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValuePost()).Methods("POST")
-	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValueDelete()).Methods("DELETE")
-	r.HandleFunc("/clients", controller.RestClientList())
-	r.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Do stuff here
-			controller.log.Infof(r.RequestURI)
-			// Call the next handler, which can be another middleware in the chain, or the final handler.
-			next.ServeHTTP(w, r)
-		})
-	})
-
+func (controller *Controller) templateHandler() func(w http.ResponseWriter, r *http.Request) {
 	hf := func(w http.ResponseWriter, r *http.Request) {
 		// get rid of /template and prefix with httpFolder
 		str := filepath.Clean(r.URL.Path)
@@ -404,8 +380,29 @@ func (controller *Controller) ServeHTTPInt(listener net.Listener) error {
 			return
 		}
 	}
-	pattern = fmt.Sprintf("/%s/templates/", controller.GetInstance())
-	r.HandleFunc(pattern, hf)
+	return hf
+}
+
+func (controller *Controller) ServeHTTPInt(listener net.Listener) error {
+	r := mux.NewRouter()
+
+	fs := http.FileServer(http.Dir(controller.httpStatic))
+	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", fs))
+	//pattern := fmt.Sprintf("/%s/static/", controller.GetInstance())
+	//r.Handle(pattern, http.StripPrefix(pattern, fs))
+
+	r.HandleFunc("/", dummy)
+	r.HandleFunc("/kvstore", controller.RestKVStoreList())
+	r.HandleFunc("/kvstore/{client}", controller.RestKVStoreClientList())
+	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValue()).Methods("GET")
+	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValuePost()).Methods("POST")
+	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValueDelete()).Methods("DELETE")
+	r.HandleFunc("/clients", controller.RestClientList())
+
+	r.Use(controller.RestLogger())
+
+//	pattern = fmt.Sprintf("/%s/templates/", controller.GetInstance())
+	r.PathPrefix("/templates/").HandlerFunc(controller.templateHandler())
 
 	_ = func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -413,6 +410,8 @@ func (controller *Controller) ServeHTTPInt(listener net.Listener) error {
 			handler.ServeHTTP(w, r)
 		})
 	}
+
+	r.Use(controller.RestLogger())
 
 	controller.httpServerInt = &http.Server{Addr: "localhost:80", Handler: r}
 
