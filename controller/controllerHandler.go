@@ -63,12 +63,16 @@ func (css ControllerServiceServer) NewClient(ctx context.Context, param *pb.NewC
 		cw := api.NewClientWrapper(css.controller.GetInstance(), css.controller.GetSessionPtr())
 
 		opts := map[string]interface{}{
-			"headless":                 false,
-			"start-fullscreen":         true,
-			"disable-notifications":    true,
-			"disable-infobars":         true,
-			"disable-gpu":              false,
-			"allow-insecure-localhost": true,
+			"headless":                            false,
+			"start-fullscreen":                    true,
+			"disable-notifications":               true,
+			"disable-infobars":                    true,
+			"disable-gpu":                         false,
+			"allow-insecure-localhost":            true,
+			"enable-immersive-fullscreen-toolbar": true,
+			"views-browser-windows":               false,
+			"enable-fullscreen-toolbar-reveal":    true,
+			"kiosk":                               true,
 		}
 
 		traceId = uniqid.New(uniqid.Params{"traceid_", false})

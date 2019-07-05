@@ -155,3 +155,7 @@ func (css ClientServiceServer) SetStatus(ctx context.Context, param *pb.String) 
 	css.client.SetStatus(stat)
 	return &empty.Empty{}, nil
 }
+
+func (css ClientServiceServer) WSMessage(ctx context.Context, req *pb.WebSocketParam) (*empty.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendWSMessage not implemented")
+}

@@ -14,7 +14,6 @@ message BrowserInitFlag {
 	oneof value {
 		string strval = 2;
 		bool bval = 3;
-		bool nil = 4;
 	}
 }
 
@@ -34,4 +33,5 @@ service ClientService {
 	rpc ShutdownBrowser( google.protobuf.Empty ) returns ( google.protobuf.Empty ) {};
 	rpc GetStatus( google.protobuf.Empty ) returns ( String ) {};
 	rpc SetStatus( String ) returns ( google.protobuf.Empty ) {};
+	rpc WSMessage( WebSocketParam ) returns ( google.protobuf.Empty ) {};
 }

@@ -18,4 +18,5 @@ service ControllerService {
     rpc Ping( String ) returns ( String ) {};
     rpc NewClient( NewClientParam ) returns ( google.protobuf.Empty ) {};
     rpc RemoveClient( String ) returns ( google.protobuf.Empty ) {};
+//    rpc WSMessage( WebSocketParam ) returns ( google.protobuf.Empty ) {};
 }

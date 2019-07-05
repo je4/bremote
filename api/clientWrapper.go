@@ -16,13 +16,13 @@ import (
 )
 
 type ClientWrapper struct {
-	instanceName string
-	session **yamux.Session
+	instanceName        string
+	session             **yamux.Session
 	clientServiceClient *ClientServiceClient
 }
 
-func NewClientWrapper( instanceName string, session **yamux.Session) *ClientWrapper {
-	cw := &ClientWrapper{instanceName:instanceName, session:session, clientServiceClient:nil}
+func NewClientWrapper(instanceName string, session **yamux.Session) *ClientWrapper {
+	cw := &ClientWrapper{instanceName: instanceName, session: session, clientServiceClient: nil}
 	return cw
 }
 
@@ -53,9 +53,7 @@ func (cw *ClientWrapper) connect() error {
 	return nil
 }
 
-
-
-func (cw *ClientWrapper) Ping( traceId string, targetInstance string ) (string, error) {
+func (cw *ClientWrapper) Ping(traceId string, targetInstance string) (string, error) {
 	if traceId == "" {
 		traceId = uniqid.New(uniqid.Params{"traceid_", false})
 	}
@@ -63,15 +61,15 @@ func (cw *ClientWrapper) Ping( traceId string, targetInstance string ) (string, 
 		return "", emperror.Wrapf(err, "cannot connect to %v", targetInstance)
 	}
 
-	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", targetInstance, "traceId", traceId )
-	pingResult, err := (*cw.clientServiceClient).Ping(ctx, &String{Value:"ping"})
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", targetInstance, "traceId", traceId)
+	pingResult, err := (*cw.clientServiceClient).Ping(ctx, &String{Value: "ping"})
 	if err != nil {
 		return "", emperror.Wrapf(err, "error pinging %v", targetInstance)
 	}
 	return pingResult.GetValue(), nil
 }
 
-func (cw *ClientWrapper) Navigate( traceId string, targetInstance string, url *url.URL, nextStatus string) (error) {
+func (cw *ClientWrapper) Navigate(traceId string, targetInstance string, url *url.URL, nextStatus string) error {
 	if traceId == "" {
 		traceId = uniqid.New(uniqid.Params{"traceid_", false})
 	}
@@ -80,7 +78,7 @@ func (cw *ClientWrapper) Navigate( traceId string, targetInstance string, url *u
 	}
 
 	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", targetInstance, "traceId", traceId)
-	param := &NavigateParam{Url:url.String(), NextStatus:nextStatus}
+	param := &NavigateParam{Url: url.String(), NextStatus: nextStatus}
 
 	_, err := (*cw.clientServiceClient).Navigate(ctx, param)
 	if err != nil {
@@ -89,7 +87,7 @@ func (cw *ClientWrapper) Navigate( traceId string, targetInstance string, url *u
 	return nil
 }
 
-func (cw *ClientWrapper) StartBrowser( traceId string, targetInstance string, execOptions *map[string]interface{} ) (error) {
+func (cw *ClientWrapper) StartBrowser(traceId string, targetInstance string, execOptions *map[string]interface{}) error {
 	if traceId == "" {
 		traceId = uniqid.New(uniqid.Params{"traceid_", false})
 	}
@@ -97,27 +95,23 @@ func (cw *ClientWrapper) StartBrowser( traceId string, targetInstance string, ex
 		return emperror.Wrapf(err, "cannot connect to %v", targetInstance)
 	}
 
-	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", targetInstance, "traceId", traceId )
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", targetInstance, "traceId", traceId)
 
 	flags := []*BrowserInitFlag{}
 	for name, val := range *execOptions {
 		bif := &BrowserInitFlag{}
 		bif.Name = name
-		if val == nil {
-			bif.Value = &BrowserInitFlag_Nil{Nil:true}
-		} else {
-			switch val.(type) {
-			case bool:
-				bif.Value = &BrowserInitFlag_Bval{val.(bool)}
-			case string:
-				bif.Value = &BrowserInitFlag_Strval{val.(string)}
-			default:
-				return errors.New(fmt.Sprintf("invalid value type %v for %v=%v", reflect.TypeOf(val), name, val))
-			}
+		switch val.(type) {
+		case bool:
+			bif.Value = &BrowserInitFlag_Bval{val.(bool)}
+		case string:
+			bif.Value = &BrowserInitFlag_Strval{val.(string)}
+		default:
+			return errors.New(fmt.Sprintf("invalid value type %v for %v=%v", reflect.TypeOf(val), name, val))
 		}
 		flags = append(flags, bif)
 	}
-	browserInitFlags := &BrowserInitFlags{Flags:flags}
+	browserInitFlags := &BrowserInitFlags{Flags: flags}
 	_, err := (*cw.clientServiceClient).StartBrowser(ctx, browserInitFlags)
 	if err != nil {
 		return emperror.Wrap(err, "error starting browser")
@@ -125,15 +119,15 @@ func (cw *ClientWrapper) StartBrowser( traceId string, targetInstance string, ex
 	return nil
 }
 
-func (cw *ClientWrapper) ShutdownBrowser( traceId string, targetInstance string) (error) {
+func (cw *ClientWrapper) ShutdownBrowser(traceId string, targetInstance string) error {
 	if traceId == "" {
 		traceId = uniqid.New(uniqid.Params{"traceid_", false})
 	}
 	if err := cw.connect(); err != nil {
-		return emperror.Wrapf(err, "cannot connect to %v",  targetInstance)
+		return emperror.Wrapf(err, "cannot connect to %v", targetInstance)
 	}
 
-	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", targetInstance, "traceId", traceId )
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", targetInstance, "traceId", traceId)
 	_, err := (*cw.clientServiceClient).ShutdownBrowser(ctx, &empty.Empty{})
 	if err != nil {
 		return emperror.Wrapf(err, "error shutting down browser of %v", targetInstance)
@@ -141,15 +135,15 @@ func (cw *ClientWrapper) ShutdownBrowser( traceId string, targetInstance string)
 	return nil
 }
 
-func (cw *ClientWrapper) GetStatus( traceId string, targetInstance string) (string, error) {
+func (cw *ClientWrapper) GetStatus(traceId string, targetInstance string) (string, error) {
 	if traceId == "" {
 		traceId = uniqid.New(uniqid.Params{"traceid_", false})
 	}
 	if err := cw.connect(); err != nil {
-		return "", emperror.Wrapf(err, "cannot connect to %v",  targetInstance)
+		return "", emperror.Wrapf(err, "cannot connect to %v", targetInstance)
 	}
 
-	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", targetInstance, "traceId", traceId )
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", targetInstance, "traceId", traceId)
 	ret, err := (*cw.clientServiceClient).GetStatus(ctx, &empty.Empty{})
 	if err != nil {
 		return "", emperror.Wrapf(err, "error getting status of %v", targetInstance)
@@ -157,16 +151,16 @@ func (cw *ClientWrapper) GetStatus( traceId string, targetInstance string) (stri
 	return ret.GetValue(), nil
 }
 
-func (cw *ClientWrapper) SetStatus( traceId string, targetInstance string, stat string) (error) {
+func (cw *ClientWrapper) SetStatus(traceId string, targetInstance string, stat string) error {
 	if traceId == "" {
 		traceId = uniqid.New(uniqid.Params{"traceid_", false})
 	}
 	if err := cw.connect(); err != nil {
-		return emperror.Wrapf(err, "cannot connect to %v",  targetInstance)
+		return emperror.Wrapf(err, "cannot connect to %v", targetInstance)
 	}
 
-	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", targetInstance, "traceId", traceId )
-	_, err := (*cw.clientServiceClient).SetStatus(ctx, &String{Value:stat})
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", targetInstance, "traceId", traceId)
+	_, err := (*cw.clientServiceClient).SetStatus(ctx, &String{Value: stat})
 	if err != nil {
 		return emperror.Wrapf(err, "error setting status of %v", targetInstance)
 	}

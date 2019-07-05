@@ -294,6 +294,7 @@ func (client *Client) getProxyDirector() (func(req *http.Request)) {
 	return director
 }
 
+
 func (client *Client) ServeHTTPExt() error {
 	r := mux.NewRouter()
 
@@ -313,6 +314,9 @@ func (client *Client) ServeHTTPExt() error {
 		},
 	}
 	r.PathPrefix("/{target}/").Handler(proxy)
+
+	// add the websocket echo client
+	r.PathPrefix("/echo/").HandlerFunc(client.wsEcho())
 
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -55,7 +55,7 @@ func main() {
 		if err != nil {
 			log.Panic("cannot get hostname")
 		}
-		config.InstanceName = "controller-"+h
+		config.InstanceName = "controller-" + h
 	}
 
 	// create logger instance
@@ -105,7 +105,7 @@ func main() {
 			if err != nil {
 				panic("invalid metadata")
 			}
-			controller.SetVar(client.InstanceName+"-test.tpl", data)
+			controller.SetVar(client.InstanceName+"-wstest.html", data)
 
 			/* not necessary because GetClients was called withStatus
 			traceId := uniqid.New(uniqid.Params{"traceid_", false})
@@ -118,12 +118,16 @@ func main() {
 			*/
 			if client.Status == common.ClientStatus_Empty {
 				opts := map[string]interface{}{
-					"headless":                 false,
-					"start-fullscreen":         true,
-					"disable-notifications":    true,
-					"disable-infobars":         true,
-					"disable-gpu":              false,
-					"allow-insecure-localhost": true,
+					"headless":                            false,
+					"start-fullscreen":                    true,
+					"disable-notifications":               true,
+					"disable-infobars":                    true,
+					"disable-gpu":                         false,
+					"allow-insecure-localhost":            true,
+					"enable-immersive-fullscreen-toolbar": true,
+					"views-browser-windows":               false,
+					"enable-fullscreen-toolbar-reveal":    true,
+					"kiosk":                               true,
 				}
 
 				traceId = uniqid.New(uniqid.Params{"traceid_", false})
