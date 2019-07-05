@@ -103,15 +103,18 @@ func (cw *ClientWrapper) StartBrowser( traceId string, targetInstance string, ex
 	for name, val := range *execOptions {
 		bif := &BrowserInitFlag{}
 		bif.Name = name
-		switch val.(type) {
-		case bool:
-			bif.Value = &BrowserInitFlag_Bval{val.(bool)}
-		case string:
-			bif.Value = &BrowserInitFlag_Strval{val.(string)}
-		default:
-			return errors.New(fmt.Sprintf("invalid value type %v for %v=%v", reflect.TypeOf(val), name, val))
+		if val == nil {
+			bif.Value = &BrowserInitFlag_Nil{Nil:true}
+		} else {
+			switch val.(type) {
+			case bool:
+				bif.Value = &BrowserInitFlag_Bval{val.(bool)}
+			case string:
+				bif.Value = &BrowserInitFlag_Strval{val.(string)}
+			default:
+				return errors.New(fmt.Sprintf("invalid value type %v for %v=%v", reflect.TypeOf(val), name, val))
+			}
 		}
-
 		flags = append(flags, bif)
 	}
 	browserInitFlags := &BrowserInitFlags{Flags:flags}
