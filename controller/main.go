@@ -45,34 +45,10 @@ d/uNLKFokMQMqVyV8hSWwE/D78oED5f/eoJ7UAEDh2jhLtZaodFN7nYnj9MOCqmE
 
 func main() {
 	configFile := flag.String("cfg", "", "config file location")
-	logFile := flag.String("logfile", "", "log file location")
-	logLevel := flag.String("loglevel", "DEBUG", "LOGLEVEL: CRITICAL|ERROR|WARNING|NOTICE|INFO|DEBUG")
-	instanceName := flag.String("instance", "", "instance name")
-	certPem := flag.String("cert", "", "tls client certificate file in PEM format")
-	keyPem := flag.String("key", "", "tls client key file in PEM format")
-	caPem := flag.String("ca", "", "tls root certificate file in PEM format")
-	addr := flag.String("proxy", "localhost:7777", "proxy addr:port")
-	httpStatic := flag.String("httpstatic", "", "folder with static files")
-	httpTemplates := flag.String("httptemplates", "", "folder with templates")
 
 	flag.Parse()
 
-	var config Config
-	if *configFile != "" {
-		config = LoadConfig(*configFile)
-	} else {
-		config = Config{
-			Logfile: *logFile,
-			Loglevel: *logLevel,
-			InstanceName: *instanceName,
-			Proxy: *addr,
-			CertPEM: *certPem,
-			KeyPEM: *keyPem,
-			CaPEM: *caPem,
-			HttpStatic: *httpStatic,
-			HttpTemplates: *httpTemplates,
-		}
-	}
+	config := LoadConfig(*configFile)
 
 	if config.InstanceName == "" {
 		h, err := os.Hostname()
@@ -112,7 +88,7 @@ func main() {
 			log.Error("session connection not available")
 			return
 		}
-		pw := api.NewProxyWrapper(*instanceName, &controller.session)
+		pw := api.NewProxyWrapper(config.InstanceName, &controller.session)
 
 		traceId := uniqid.New(uniqid.Params{"traceid_", false})
 		clients, err := pw.GetClients(traceId, common.SessionType_Client, true)
@@ -121,7 +97,7 @@ func main() {
 		}
 		log.Infof("[%v] Clients: %v", traceId, clients)
 
-		cw := api.NewClientWrapper(*instanceName, &controller.session)
+		cw := api.NewClientWrapper(config.InstanceName, &controller.session)
 		for _, client := range clients {
 
 			data := map[string]interface{}{}

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/bluele/gcache"
 	"github.com/goph/emperror"
+	"github.com/gorilla/mux"
 	"github.com/hashicorp/yamux"
 	pb "github.com/je4/bremote/api"
 	"github.com/je4/bremote/common"
@@ -31,15 +32,19 @@ type Controller struct {
 	log                *logging.Logger
 	instance           string
 	addr               string
-	httpStatic         string
-	httpTemplates      string
+	httpsAddr          string
 	caFile             string
 	certFile           string
 	keyFile            string
+	httpsCertFile      string
+	httpsKeyFile       string
+	httpStatic         string
+	httpTemplates      string
 	conn               *tls.Conn
 	session            *yamux.Session
 	grpcServer         *grpc.Server
 	httpServerInt      *http.Server
+	httpServerExt      *http.Server
 	cmuxServer         *cmux.CMux
 	end                chan bool
 	roots              *x509.CertPool
@@ -48,22 +53,30 @@ type Controller struct {
 	templateCache      gcache.Cache
 	templateDelimLeft  string
 	templateDelimRight string
+	templatesInternal  map[string]string
 }
 
 func NewController(config Config, log *logging.Logger) *Controller {
 	controller := &Controller{log: log,
-		instance:      config.InstanceName,
-		addr:          config.Proxy,
-		httpStatic:    config.HttpStatic,
-		httpTemplates: config.HttpTemplates,
-		caFile:        config.CaPEM,
-		certFile:      config.CertPEM,
-		keyFile:       config.KeyPEM,
-		end:           make(chan bool, 1),
-		kvs:           make(map[string]interface{}),
-		templateCache: gcache.New(100).LRU().Build(),
-		templateDelimLeft:config.TemplateDelimLeft,
-		templateDelimRight:config.TemplateDelimRight,
+		instance:           config.InstanceName,
+		addr:               config.Proxy,
+		httpsCertFile:      config.HttpsCertPEM,
+		httpsKeyFile:       config.HttpsKeyPEM,
+		httpsAddr:          config.HttpsAddr,
+		httpStatic:         config.HttpStatic,
+		httpTemplates:      config.Templates.Folder,
+		caFile:             config.CaPEM,
+		certFile:           config.CertPEM,
+		keyFile:            config.KeyPEM,
+		end:                make(chan bool, 1),
+		kvs:                make(map[string]interface{}),
+		templateCache:      gcache.New(100).LRU().Build(),
+		templateDelimLeft:  config.Templates.DelimLeft,
+		templateDelimRight: config.Templates.DelimRight,
+		templatesInternal:  make(map[string]string),
+	}
+	for _, internal := range config.Templates.Internal {
+		controller.templatesInternal[internal.Name] = internal.File
 	}
 	return controller
 }
@@ -80,10 +93,15 @@ func (controller *Controller) SetVar(key string, value interface{}) {
 	controller.kvs[key] = value
 }
 
+func (controller *Controller) DeleteVar(key string) {
+	delete( controller.kvs, key)
+}
+
 func (controller *Controller) GetVar(key string) (interface{}, error) {
 	ret, ok := controller.kvs[key]
 	if !ok {
-		return "", errors.New(fmt.Sprintf("no value found for key %v", key))
+		var r interface{}
+		return r, errors.New(fmt.Sprintf("no value found for key %v", key))
 	}
 	return ret, nil
 }
@@ -173,7 +191,7 @@ func (controller *Controller) Serve() error {
 			grpcl := (*controller.cmuxServer).Match(cmux.Any())
 
 			// starting 2 services
-			wg.Add(3)
+			wg.Add(4)
 
 			go func() {
 				if err := controller.ServeGRPC(grpcl); err != nil {
@@ -185,6 +203,14 @@ func (controller *Controller) Serve() error {
 			go func() {
 				if err := controller.ServeHTTPInt(httpl); err != nil {
 					controller.log.Errorf("error serving HTTP: %v", err)
+					controller.Close()
+				}
+				wg.Done()
+			}()
+
+			go func() {
+				if err := controller.ServeHTTPExt(); err != nil {
+					controller.log.Errorf("error serving external HTTP: %v", err)
 					controller.Close()
 				}
 				wg.Done()
@@ -251,13 +277,86 @@ func (controller *Controller) ServeCmux() error {
 	return nil
 }
 
+
+func (controller *Controller) ServeHTTPExt() error {
+	r := mux.NewRouter()
+	r.HandleFunc("/", dummy)
+	r.HandleFunc("/kvstore", controller.RestKVStoreList())
+	r.HandleFunc("/kvstore/{client}", controller.RestKVStoreClientList())
+	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValue()).Methods("GET")
+	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValuePost()).Methods("POST")
+	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValueDelete()).Methods("DELETE")
+	r.HandleFunc("/clients", controller.RestClientList())
+
+	err := r.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
+		pathTemplate, err := route.GetPathTemplate()
+		if err == nil {
+			fmt.Println("ROUTE:", pathTemplate)
+		}
+		pathRegexp, err := route.GetPathRegexp()
+		if err == nil {
+			fmt.Println("Path regexp:", pathRegexp)
+		}
+		queriesTemplates, err := route.GetQueriesTemplates()
+		if err == nil {
+			fmt.Println("Queries templates:", strings.Join(queriesTemplates, ","))
+		}
+		queriesRegexps, err := route.GetQueriesRegexp()
+		if err == nil {
+			fmt.Println("Queries regexps:", strings.Join(queriesRegexps, ","))
+		}
+		methods, err := route.GetMethods()
+		if err == nil {
+			fmt.Println("Methods:", strings.Join(methods, ","))
+		}
+		fmt.Println()
+		return nil
+	})
+
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Do stuff here
+			controller.log.Infof(r.RequestURI)
+			// Call the next handler, which can be another middleware in the chain, or the final handler.
+			next.ServeHTTP(w, r)
+		})
+	})
+
+	controller.httpServerExt = &http.Server{Addr: controller.httpsAddr, Handler: r}
+
+	controller.log.Infof("launching external HTTPS on %s", controller.httpsAddr)
+	err = controller.httpServerExt.ListenAndServeTLS(controller.httpsCertFile, controller.httpsKeyFile)
+	if err != nil {
+		controller.httpServerExt = nil
+		return emperror.Wrapf(err, "failed to serve")
+	}
+	controller.httpServerExt = nil
+	return nil
+}
+
 func (controller *Controller) ServeHTTPInt(listener net.Listener) error {
-	httpservmux := http.NewServeMux()
-	// static files only from /static
+	r := mux.NewRouter()
+
 	fs := http.FileServer(http.Dir(controller.httpStatic))
-	httpservmux.Handle("/static/", http.StripPrefix("/static/", fs))
+	r.Handle("/static/", http.StripPrefix("/static/", fs))
 	pattern := fmt.Sprintf("/%s/static/", controller.GetInstance())
-	httpservmux.Handle(pattern, http.StripPrefix(pattern, fs))
+	r.Handle(pattern, http.StripPrefix(pattern, fs))
+
+	r.HandleFunc("/", dummy)
+	r.HandleFunc("/kvstore", controller.RestKVStoreList())
+	r.HandleFunc("/kvstore/{client}", controller.RestKVStoreClientList())
+	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValue()).Methods("GET")
+	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValuePost()).Methods("POST")
+	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValueDelete()).Methods("DELETE")
+	r.HandleFunc("/clients", controller.RestClientList())
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Do stuff here
+			controller.log.Infof(r.RequestURI)
+			// Call the next handler, which can be another middleware in the chain, or the final handler.
+			next.ServeHTTP(w, r)
+		})
+	})
 
 	hf := func(w http.ResponseWriter, r *http.Request) {
 		// get rid of /template and prefix with httpFolder
@@ -306,16 +405,16 @@ func (controller *Controller) ServeHTTPInt(listener net.Listener) error {
 		}
 	}
 	pattern = fmt.Sprintf("/%s/templates/", controller.GetInstance())
-	httpservmux.HandleFunc(pattern, hf)
+	r.HandleFunc(pattern, hf)
 
-	lr := func(handler http.Handler) http.Handler {
+	_ = func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			controller.log.Infof("[%s] %s %s %s\n", controller.GetInstance(), r.RemoteAddr, r.Method, r.URL)
 			handler.ServeHTTP(w, r)
 		})
 	}
 
-	controller.httpServerInt = &http.Server{Addr: "localhost:80", Handler: lr(httpservmux)}
+	controller.httpServerInt = &http.Server{Addr: "localhost:80", Handler: r}
 
 	controller.log.Info("launching HTTP server over TLS connection...")
 	// starting http server
@@ -358,6 +457,12 @@ func (controller *Controller) Close() error {
 		ctx, _ := context.WithTimeout(context.Background(), 2*time.Second)
 		controller.httpServerInt.Shutdown(ctx)
 		controller.httpServerInt = nil
+	}
+
+	if controller.httpServerExt != nil {
+		ctx, _ := context.WithTimeout(context.Background(), 2*time.Second)
+		controller.httpServerExt.Shutdown(ctx)
+		controller.httpServerExt = nil
 	}
 
 	if controller.session != nil {
