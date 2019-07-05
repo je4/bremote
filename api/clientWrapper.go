@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"net"
+	"net/url"
 	"reflect"
 )
 
@@ -68,6 +69,24 @@ func (cw *ClientWrapper) Ping( traceId string, targetInstance string ) (string, 
 		return "", emperror.Wrapf(err, "error pinging %v", targetInstance)
 	}
 	return pingResult.GetValue(), nil
+}
+
+func (cw *ClientWrapper) Navigate( traceId string, targetInstance string, url *url.URL, nextStatus string) (error) {
+	if traceId == "" {
+		traceId = uniqid.New(uniqid.Params{"traceid_", false})
+	}
+	if err := cw.connect(); err != nil {
+		return emperror.Wrapf(err, "cannot connect to %v", targetInstance)
+	}
+
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", targetInstance, "traceId", traceId)
+	param := &NavigateParam{Url:url.String(), NextStatus:nextStatus}
+
+	_, err := (*cw.clientServiceClient).Navigate(ctx, param)
+	if err != nil {
+		return emperror.Wrap(err, "error navigating client")
+	}
+	return nil
 }
 
 func (cw *ClientWrapper) StartBrowser( traceId string, targetInstance string, execOptions *map[string]interface{} ) (error) {

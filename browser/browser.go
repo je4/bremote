@@ -14,6 +14,7 @@ type Browser struct {
 	allocCancel context.CancelFunc
 	taskCtx     context.Context
 	taskCancel  context.CancelFunc
+	browser     *chromedp.Browser
 	TempDir     string
 	opts        []chromedp.ExecAllocatorOption
 	log         *logging.Logger
@@ -22,6 +23,16 @@ type Browser struct {
 func NewBrowser(execOptions map[string]interface{}, log *logging.Logger) (*Browser, error) {
 	browser := &Browser{log: log}
 	return browser, browser.Init(execOptions)
+}
+
+func (browser *Browser) init() error {
+	// create the execution context
+	browser.allocCtx, browser.allocCancel = chromedp.NewExecAllocator(context.Background(), browser.opts...)
+
+	// also set up a custom logger
+	browser.taskCtx, browser.taskCancel = chromedp.NewContext(browser.allocCtx, chromedp.WithLogf(browser.log.Debugf))
+
+	return nil
 }
 
 func (browser *Browser) Init(execOptions map[string]interface{}) error {
@@ -39,13 +50,19 @@ func (browser *Browser) Init(execOptions map[string]interface{}) error {
 		browser.opts = append(browser.opts, chromedp.Flag(name, value))
 	}
 
-	// create the execution context
-	browser.allocCtx, browser.allocCancel = chromedp.NewExecAllocator(context.Background(), browser.opts...)
+	return browser.init()
+}
 
-	// also set up a custom logger
-	browser.taskCtx, browser.taskCancel = chromedp.NewContext(browser.allocCtx, chromedp.WithLogf(browser.log.Debugf))
-
-	return nil
+func (browser *Browser) Tasks(tasks chromedp.Tasks) error {
+	if err := browser.taskCtx.Err(); err != nil {
+		if err := browser.init(); err != nil {
+			return emperror.Wrap(err, "cannot re-initialize browser")
+		}
+		if err := browser.Run(); err != nil {
+			return emperror.Wrap(err, "cannot re-start browser")
+		}
+	}
+	return chromedp.Run(browser.taskCtx, tasks)
 }
 
 func (browser *Browser) Run() error {

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/chromedp/chromedp"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/op/go-logging"
 	"google.golang.org/grpc/codes"
@@ -89,6 +90,34 @@ func (css ClientServiceServer) StartBrowser(ctx context.Context, req *pb.Browser
 	css.client.SetStatus(common.ClientStatus_EmptyBrowser)
 	return &empty.Empty{}, nil
 }
+
+func (css ClientServiceServer) Navigate(ctx context.Context, req *pb.NavigateParam) (*empty.Empty, error) {
+	traceId, sourceInstance, targetInstance, err := common.RpcContextMetadata(ctx)
+	if err != nil {
+		css.log.Errorf("invalid metadata in call to %v: %v", "LoadPage()", err)
+		return nil, status.Errorf(codes.Unavailable, fmt.Sprintf("invalid metadata: %v", err))
+	}
+
+	css.log.Infof("[%v] %v -> %v/Navigate(%v, %v)", traceId, sourceInstance, targetInstance, req.GetUrl(), req.GetNextStatus())
+
+	b, err := css.client.GetBrowser()
+	if err != nil {
+		css.log.Errorf("could not get browser: %v", err)
+		return nil, status.Errorf(codes.Internal, fmt.Sprintf("could not get browser: %v", err))
+	}
+
+	tasks := chromedp.Tasks{
+		chromedp.Navigate(req.GetUrl()),
+	}
+	err = b.Tasks(tasks)
+	if err != nil {
+		css.log.Errorf("could not navigate: %v", err)
+		return nil, status.Errorf(codes.Internal, fmt.Sprintf("could not navigate: %v", err))
+	}
+	css.client.SetStatus(req.GetNextStatus())
+	return &empty.Empty{}, nil
+}
+
 
 func (css ClientServiceServer) ShutdownBrowser(ctx context.Context, req *empty.Empty) (*empty.Empty, error) {
 	traceId, sourceInstance, targetInstance, err := common.RpcContextMetadata(ctx)

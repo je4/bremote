@@ -77,6 +77,13 @@ func (client *Client) SetBrowser(browser *browser.Browser) error {
 	return nil
 }
 
+func (client *Client) GetBrowser() (*browser.Browser, error) {
+	if client.browser == nil {
+		return nil, errors.New( "browser not initialized")
+	}
+	return client.browser, nil
+}
+
 func (client *Client) SetStatus(status string) {
 	client.status = status
 }

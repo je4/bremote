@@ -17,6 +17,11 @@ message BrowserInitFlag {
 	}
 }
 
+message NavigateParam {
+	string Url = 1;
+	string NextStatus = 2;
+}
+
 message BrowserInitFlags {
 	repeated BrowserInitFlag flags = 1;
 }
@@ -24,6 +29,7 @@ message BrowserInitFlags {
 service ClientService {
 	rpc Ping( String ) returns ( String ) {};
 	rpc StartBrowser( BrowserInitFlags ) returns ( google.protobuf.Empty ) {};
+	rpc Navigate( NavigateParam ) returns ( google.protobuf.Empty ) {};
 	rpc ShutdownBrowser( google.protobuf.Empty ) returns ( google.protobuf.Empty ) {};
 	rpc GetStatus( google.protobuf.Empty ) returns ( String ) {};
 	rpc SetStatus( String ) returns ( google.protobuf.Empty ) {};

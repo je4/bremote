@@ -283,9 +283,10 @@ func (controller *Controller) ServeHTTPExt() error {
 	r.HandleFunc("/kvstore", controller.RestKVStoreList())
 	r.HandleFunc("/kvstore/{client}", controller.RestKVStoreClientList())
 	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValue()).Methods("GET")
-	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValuePost()).Methods("POST")
+	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValuePut()).Methods("PUT")
 	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValueDelete()).Methods("DELETE")
-	r.HandleFunc("/clients", controller.RestClientList())
+	r.HandleFunc("/client", controller.RestClientList())
+	r.HandleFunc("/client/{client}/navigate", controller.RestClientNavigate()).Methods("POST")
 
 	err := r.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
 		pathTemplate, err := route.GetPathTemplate()
@@ -395,9 +396,10 @@ func (controller *Controller) ServeHTTPInt(listener net.Listener) error {
 	r.HandleFunc("/kvstore", controller.RestKVStoreList())
 	r.HandleFunc("/kvstore/{client}", controller.RestKVStoreClientList())
 	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValue()).Methods("GET")
-	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValuePost()).Methods("POST")
+	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValuePut()).Methods("PUT")
 	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValueDelete()).Methods("DELETE")
-	r.HandleFunc("/clients", controller.RestClientList())
+	r.HandleFunc("/client", controller.RestClientList())
+	r.HandleFunc("/client/{client}/navigate", controller.RestClientNavigate()).Methods("POST")
 
 	r.Use(controller.RestLogger())
 

@@ -4,8 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/gorilla/mux"
+	pb "github.com/je4/bremote/api"
+	"github.com/mintance/go-uniqid"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -103,7 +106,7 @@ func (controller *Controller) RestKVStoreClientValue() func(w http.ResponseWrite
 	}
 }
 
-func (controller *Controller) RestKVStoreClientValuePost() func(w http.ResponseWriter, r *http.Request) {
+func (controller *Controller) RestKVStoreClientValuePut() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		client := vars["client"]
@@ -122,7 +125,7 @@ func (controller *Controller) RestKVStoreClientValuePost() func(w http.ResponseW
 		controller.SetVar(k, data)
 
 		w.Header().Add("Content-Type", "application/json")
-		io.WriteString(w, `{"status":"ok"`)
+		io.WriteString(w, `{"status":"ok"}`)
 	}
 }
 
@@ -137,6 +140,42 @@ func (controller *Controller) RestKVStoreClientValueDelete() func(w http.Respons
 		controller.DeleteVar(k)
 
 		w.Header().Add("Content-Type", "application/json")
-		io.WriteString(w, `{"status":"ok"`)
+		io.WriteString(w, `{"status":"ok"}`)
+	}
+}
+
+func (controller *Controller) RestClientNavigate() func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		vars := mux.Vars(r)
+		client := vars["client"]
+
+		decoder := json.NewDecoder(r.Body)
+		var data interface{}
+		err := decoder.Decode(&data)
+		if err != nil {
+			controller.log.Errorf("cannot decode data: %v", err)
+			http.Error(w, fmt.Sprintf("cannot decode data: %v", err), http.StatusInternalServerError)
+			return
+		}
+		params := data.(map[string]interface{})
+		u, err := url.Parse(params["url"].(string))
+		if err != nil {
+			controller.log.Errorf( "cannot parse url %v: %v", params["url"].(string), err)
+			http.Error(w, fmt.Sprintf("cannot parse url %v: %v", params["url"].(string), err), http.StatusInternalServerError)
+		}
+		nextStatus := params["nextstatus"].(string)
+
+		controller.log.Infof("%v::RestClientNavigate(%v, %v)", client, u.String(), nextStatus)
+
+		cw := pb.NewClientWrapper(controller.instance, controller.GetSessionPtr())
+		traceId := uniqid.New(uniqid.Params{"traceid_", false})
+		err = cw.Navigate(traceId, client, u, nextStatus)
+		if err != nil {
+			controller.log.Errorf( "cannot navigate to %v: %v", u.String(), err)
+			http.Error(w, fmt.Sprintf("cannot navigate to %v: %v", u.String(), err), http.StatusInternalServerError)
+		}
+
+		w.Header().Add("Content-Type", "application/json")
+		io.WriteString(w, `{"status":"ok"}`)
 	}
 }
