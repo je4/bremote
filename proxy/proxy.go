@@ -24,6 +24,7 @@ type Proxy struct {
 	keyFile  string
 	tlsCfg   *tls.Config
 	sessions map[string]*ProxySession
+	groups   *InstanceGroups
 
 	sync.RWMutex
 }
@@ -38,7 +39,9 @@ func NewProxy(config Config, log *logging.Logger) (*Proxy, error) {
 		caFile:   config.CaPEM,
 		certFile: config.CertPEM,
 		keyFile:  config.KeyPEM,
-		sessions: make(map[string]*ProxySession)}
+		sessions: make(map[string]*ProxySession),
+		groups:   NewInstanceGroups(),
+	}
 	if err := proxy.Init(); err != nil {
 		return nil, emperror.Wrap(err, "cannot connect")
 	}

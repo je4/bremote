@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/goph/emperror"
 	"github.com/hashicorp/yamux"
 	"github.com/je4/bremote/common"
@@ -116,4 +117,85 @@ func (cw *ProxyWrapper) GetClients(traceId string, t common.SessionType, withSta
 		})
 	}
 	return ret, nil
+}
+
+
+func (cw *ProxyWrapper) GroupAddInstance(traceId string, group string, instance string) error {
+	if traceId == "" {
+		traceId = uniqid.New(uniqid.Params{"traceid_", false})
+	}
+	if err := cw.connect(); err != nil {
+		return emperror.Wrapf(err, "cannot connect")
+	}
+
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "traceid", traceId)
+	_, err := (*cw.proxyServiceClient).GroupAddInstance(ctx, &GroupInstanceMessage{Group:group, Instance:instance})
+	if err != nil {
+		return emperror.Wrapf(err, "error adding instance %v to group &v", instance, group)
+	}
+	return nil
+}
+
+func (cw *ProxyWrapper) GroupRemoveInstance(traceId string, group string, instance string) error {
+	if traceId == "" {
+		traceId = uniqid.New(uniqid.Params{"traceid_", false})
+	}
+	if err := cw.connect(); err != nil {
+		return emperror.Wrapf(err, "cannot connect")
+	}
+
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "traceid", traceId)
+	_, err := (*cw.proxyServiceClient).GroupRemoveInstance(ctx, &GroupInstanceMessage{Group:group, Instance:instance})
+	if err != nil {
+		return emperror.Wrapf(err, "error adding instance %v to group &v", instance, group)
+	}
+	return nil
+}
+
+func (cw *ProxyWrapper) GroupGetMembers(traceId string, groupname string) ([]string, error) {
+	if traceId == "" {
+		traceId = uniqid.New(uniqid.Params{"traceid_", false})
+	}
+	if err := cw.connect(); err != nil {
+		return []string{}, emperror.Wrapf(err, "cannot connect")
+	}
+
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "traceid", traceId)
+	ret, err := (*cw.proxyServiceClient).GroupGetMembers(ctx, &String{Value:groupname})
+	if err != nil {
+		return []string{}, emperror.Wrapf(err, "error getting members of group %v", groupname)
+	}
+	return ret.GetInstances(), nil
+}
+
+func (cw *ProxyWrapper) GroupDelete(traceId string, groupname string) error {
+	if traceId == "" {
+		traceId = uniqid.New(uniqid.Params{"traceid_", false})
+	}
+	if err := cw.connect(); err != nil {
+		return emperror.Wrapf(err, "cannot connect")
+	}
+
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "traceid", traceId)
+	_, err := (*cw.proxyServiceClient).GroupDelete(ctx, &String{Value:groupname})
+	if err != nil {
+		return emperror.Wrapf(err, "error deleting group %v", groupname)
+	}
+	return nil
+}
+
+func (cw *ProxyWrapper) GroupList(traceId string) ([]string, error) {
+	if traceId == "" {
+		traceId = uniqid.New(uniqid.Params{"traceid_", false})
+	}
+	if err := cw.connect(); err != nil {
+		return []string{}, emperror.Wrapf(err, "cannot connect")
+	}
+
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "traceid", traceId)
+	ret, err := (*cw.proxyServiceClient).GroupList(ctx, &empty.Empty{})
+	if err != nil {
+		return []string{}, emperror.Wrapf(err, "error getting list of groups")
+	}
+	return ret.GetGroups(), nil
 }

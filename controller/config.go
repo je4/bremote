@@ -15,6 +15,7 @@ type TemplatesConfig struct {
 	DelimLeft  string
 	DelimRight string
 	Internal   []TemplatesInternalConfig
+	Cache      bool
 }
 
 type Config struct {

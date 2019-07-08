@@ -26,7 +26,3 @@ message ProxyClient {
     string instance = 2;
     string status = 3;
 }
-
-message WebSocketParam {
-    google.protobuf.Any message = 1;
-}

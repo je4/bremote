@@ -1,8 +1,8 @@
 logfile = "" # log file location
 loglevel = "DEBUG" # CRITICAL|ERROR|WARNING|NOTICE|INFO|DEBUG
 instancename = "controller01" # instance name
-#proxy = "localhost:7777" # proxy addr:port
-proxy = "vpn-de2.info-age.net:80" # proxy addr:port
+proxy = "localhost:7777" # proxy addr:port
+#proxy = "vpn-de2.info-age.net:80" # proxy addr:port
 certpem = "C:/daten/go/certs/bremote_client.pem" # tls client certificate file in PEM format
 keypem = "C:/daten/go/certs/bremote_client.key" # tls client key file in PEM format
 capem = "C:/daten/go/certs/bremote_ca.pem" # tls root certificate file in PEM format
@@ -15,6 +15,7 @@ httpstatic = "C:/daten/go/src/github.com/je4/bremote/controller/data/static" # f
     folder = "C:/daten/go/src/github.com/je4/bremote/controller/data/templates" # folder for html templates
     delimleft = "[["
     delimright = "]]"
+    cache = false
     [[templates.internal]]
         name = "test"
         file = "internal/test.html"

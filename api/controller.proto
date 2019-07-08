@@ -3,6 +3,7 @@ syntax = "proto3";
 package info_age.bremote;
 
 import "google/protobuf/empty.proto";
+import "google/protobuf/any.proto";
 import "types.proto";
 
 option go_package="api";
@@ -18,5 +19,6 @@ service ControllerService {
     rpc Ping( String ) returns ( String ) {};
     rpc NewClient( NewClientParam ) returns ( google.protobuf.Empty ) {};
     rpc RemoveClient( String ) returns ( google.protobuf.Empty ) {};
-//    rpc WSMessage( WebSocketParam ) returns ( google.protobuf.Empty ) {};
+    rpc WebSocketMessage( google.protobuf.Any ) returns (google.protobuf.Empty) {}
+    //    rpc WSMessage( WebSocketParam ) returns ( google.protobuf.Empty ) {};
 }

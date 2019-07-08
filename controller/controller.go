@@ -40,6 +40,7 @@ type Controller struct {
 	httpsKeyFile       string
 	httpStatic         string
 	httpTemplates      string
+	httpTemplateCache  bool
 	conn               *tls.Conn
 	session            *yamux.Session
 	grpcServer         *grpc.Server
@@ -65,6 +66,7 @@ func NewController(config Config, log *logging.Logger) *Controller {
 		httpsAddr:          config.HttpsAddr,
 		httpStatic:         config.HttpStatic,
 		httpTemplates:      config.Templates.Folder,
+		httpTemplateCache:  config.Templates.Cache,
 		caFile:             config.CaPEM,
 		certFile:           config.CertPEM,
 		keyFile:            config.KeyPEM,
@@ -279,14 +281,7 @@ func (controller *Controller) ServeCmux() error {
 
 func (controller *Controller) ServeHTTPExt() error {
 	r := mux.NewRouter()
-	r.HandleFunc("/", dummy)
-	r.HandleFunc("/kvstore", controller.RestKVStoreList())
-	r.HandleFunc("/kvstore/{client}", controller.RestKVStoreClientList())
-	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValue()).Methods("GET")
-	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValuePut()).Methods("PUT")
-	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValueDelete()).Methods("DELETE")
-	r.HandleFunc("/client", controller.RestClientList())
-	r.HandleFunc("/client/{client}/navigate", controller.RestClientNavigate()).Methods("POST")
+	controller.addRestRoutes(r)
 
 	err := r.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
 		pathTemplate, err := route.GetPathTemplate()
@@ -369,7 +364,10 @@ func (controller *Controller) templateHandler() func(w http.ResponseWriter, r *h
 				http.Error(w, fmt.Sprintf("error in template %v: %v", file, err), http.StatusUnprocessableEntity)
 				return
 			}
-			controller.templateCache.Set(key, tmpl)
+			// add to cache only if enabled
+			if controller.httpTemplateCache {
+				controller.templateCache.Set(key, tmpl)
+			}
 		} else {
 			tmpl = h.(*template.Template)
 		}
@@ -392,18 +390,11 @@ func (controller *Controller) ServeHTTPInt(listener net.Listener) error {
 	//pattern := fmt.Sprintf("/%s/static/", controller.GetInstance())
 	//r.Handle(pattern, http.StripPrefix(pattern, fs))
 
-	r.HandleFunc("/", dummy)
-	r.HandleFunc("/kvstore", controller.RestKVStoreList())
-	r.HandleFunc("/kvstore/{client}", controller.RestKVStoreClientList())
-	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValue()).Methods("GET")
-	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValuePut()).Methods("PUT")
-	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValueDelete()).Methods("DELETE")
-	r.HandleFunc("/client", controller.RestClientList())
-	r.HandleFunc("/client/{client}/navigate", controller.RestClientNavigate()).Methods("POST")
+	controller.addRestRoutes(r)
 
 	r.Use(controller.RestLogger())
 
-//	pattern = fmt.Sprintf("/%s/templates/", controller.GetInstance())
+	//	pattern = fmt.Sprintf("/%s/templates/", controller.GetInstance())
 	r.PathPrefix("/templates/").HandlerFunc(controller.templateHandler())
 
 	_ = func(handler http.Handler) http.Handler {

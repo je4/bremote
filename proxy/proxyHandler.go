@@ -109,3 +109,33 @@ func (pss ProxyServiceServer) GetClients(ctx context.Context, req *pb.GetClients
 	}
 	return clients, nil
 }
+
+func (pss ProxyServiceServer) GroupAddInstance(ctx context.Context, req *pb.GroupInstanceMessage) (*empty.Empty, error) {
+	groupName := req.GetGroup()
+	instanceName := req.GetInstance()
+	pss.proxySession.proxy.groups.AddInstance(groupName, instanceName)
+	return &empty.Empty{}, nil
+}
+func (pss ProxyServiceServer) GroupRemoveInstance(ctx context.Context, req *pb.GroupInstanceMessage) (*empty.Empty, error) {
+	groupName := req.GetGroup()
+	instanceName := req.GetInstance()
+	pss.proxySession.proxy.groups.RemoveInstance(groupName, instanceName)
+	return &empty.Empty{}, nil
+}
+func (pss ProxyServiceServer) GroupGetMembers(ctx context.Context, req *pb.String) (*pb.MemberListMessage, error) {
+	groupName := req.GetValue()
+
+	clients := new(pb.MemberListMessage)
+	clients.Instances = pss.proxySession.proxy.groups.GetMembers(groupName)
+	return clients, nil
+}
+func (pss ProxyServiceServer) GroupDelete(ctx context.Context, req *pb.String) (*empty.Empty, error) {
+	pss.proxySession.proxy.groups.Delete(req.Value)
+	return &empty.Empty{}, nil
+}
+
+func (pss ProxyServiceServer) GroupList(context.Context, *empty.Empty) (*pb.GroupListMessage, error) {
+	result := &pb.GroupListMessage{}
+	result.Groups = pss.proxySession.proxy.groups.GetGroups()
+	return result, nil
+}
