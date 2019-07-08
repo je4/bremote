@@ -139,3 +139,29 @@ func (pss ProxyServiceServer) GroupList(context.Context, *empty.Empty) (*pb.Grou
 	result.Groups = pss.proxySession.proxy.groups.GetGroups()
 	return result, nil
 }
+
+func (pss ProxyServiceServer) WebSocketMessage(ctx context.Context, req *pb.Bytes) (*empty.Empty, error) {
+	traceId, sourceInstance, targetGroup, err := common.RpcContextMetadata(ctx)
+	if err != nil {
+		pss.log.Errorf("invalid metadata in call to %v: %v", "WebSocketMessage()", err)
+		return nil, status.Errorf(codes.Unavailable, fmt.Sprintf("invalid metadata in call to %v: %v", "WebSocketMessage()", err))
+	}
+
+	pss.log.Infof("[%v] %v -> /ws() -> %v", traceId, sourceInstance,  targetGroup)
+
+	instances := pss.proxySession.proxy.groups.GetMembers(targetGroup)
+	for _, instanceName := range instances {
+		// don't send to myself
+		if instanceName == pss.proxySession.GetInstance() {
+			continue
+		}
+		session, err := pss.proxySession.proxy.GetSession(instanceName)
+		if err != nil {
+			pss.log.Errorf("client %v not active - cannot send websocket message: %v", instanceName, err )
+			continue
+		}
+
+	}
+
+	return nil, status.Errorf(codes.Unimplemented, "method WebSocketMessage not implemented")
+}
