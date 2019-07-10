@@ -242,7 +242,7 @@ func (controller *Controller) RestKVStoreClientValuePut() func(w http.ResponseWr
 		vars := mux.Vars(r)
 		client := vars["client"]
 		key := vars["key"]
-		controller.log.Infof("RestKVStoreClientValuePost(%v, %v)", client, key)
+		controller.log.Debugf("RestKVStoreClientValuePost(%v, %v)", client, key)
 		k := client + "-" + key
 
 		decoder := json.NewDecoder(r.Body)

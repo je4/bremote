@@ -13,6 +13,7 @@ message InitParam {
     string instance = 1;
     ProxySessionType sessionType = 2;
     string status = 3;
+    string httpAddr = 4;
 }
 
 message ProxyClientList {
@@ -45,5 +46,5 @@ service ProxyService {
     rpc GroupRemoveInstance( GroupInstanceMessage ) returns (google.protobuf.Empty) {}
     rpc GroupGetMembers( String ) returns ( MemberListMessage ) {}
     rpc GroupDelete( String ) returns ( google.protobuf.Empty ) {}
-    rpc WebSocketMessage( Bytes ) returns (google.protobuf.Empty) {}
+    rpc WebsocketMessage( Bytes ) returns (google.protobuf.Empty) {}
 }

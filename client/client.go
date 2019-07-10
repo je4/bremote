@@ -48,6 +48,7 @@ type Client struct {
 	end           chan bool
 	browser       *browser.Browser
 	status        string
+	wsGroup       map[string]*ClientWebsocket
 }
 
 func NewClient(config Config, log *logging.Logger) *Client {
@@ -64,6 +65,7 @@ func NewClient(config Config, log *logging.Logger) *Client {
 		httpsAddr:     config.HttpsAddr,
 		end:           make(chan bool, 1),
 		status:        common.ClientStatus_Empty,
+		wsGroup:       make(map[string]*ClientWebsocket),
 	}
 
 	return client
@@ -77,9 +79,37 @@ func (client *Client) SetBrowser(browser *browser.Browser) error {
 	return nil
 }
 
+func (client *Client) SetGroupWebsocket(group string, ws *ClientWebsocket) {
+	client.wsGroup[group] = ws
+}
+
+func (client *Client) DeleteGroupWebsocket(group string) {
+	delete(client.wsGroup, group)
+}
+
+func (client *Client) GetGroupWebsocket(group string ) (*ClientWebsocket, error) {
+	ws, ok := client.wsGroup[group]
+	if !ok {
+		return nil, errors.New(fmt.Sprintf("no websocket connection for group %v", group))
+	}
+	return ws, nil
+
+}
+
+func (client *Client) SendGroupWebsocket(group string, message []byte ) error {
+	ws, err := client.GetGroupWebsocket(group)
+	if err != nil {
+		return emperror.Wrapf(err, "cannot send to group %v", group)
+	}
+	ws.send <- message
+	return nil
+
+}
+
+
 func (client *Client) GetBrowser() (*browser.Browser, error) {
 	if client.browser == nil {
-		return nil, errors.New( "browser not initialized")
+		return nil, errors.New("browser not initialized")
 	}
 	return client.browser, nil
 }
@@ -96,6 +126,9 @@ func (client *Client) GetInstance() string {
 	return client.instance
 }
 
+func (client *Client) GetSessionPtr() **yamux.Session {
+	return &client.session
+}
 func (client *Client) ShutdownBrowser() error {
 	if client.browser == nil {
 		return errors.New("no browser available")
@@ -183,7 +216,6 @@ func (client *Client) Serve() error {
 			// the rest should be grpc
 			grpcl := (*client.cmuxServer).Match(cmux.Any())
 
-
 			wg.Add(4)
 
 			go func() {
@@ -193,13 +225,13 @@ func (client *Client) Serve() error {
 				}
 				wg.Done()
 			}()
-				go func() {
-					if err := client.ServeHTTPInt(httpl); err != nil {
-						client.log.Errorf("error serving internal HTTP: %v", err)
-						client.Close()
-					}
-					wg.Done()
-				}()
+			go func() {
+				if err := client.ServeHTTPInt(httpl); err != nil {
+					client.log.Errorf("error serving internal HTTP: %v", err)
+					client.Close()
+				}
+				wg.Done()
+			}()
 
 			go func() {
 				if err := client.ServeHTTPExt(); err != nil {
@@ -246,7 +278,7 @@ func (client *Client) InitProxy() error {
 	pw := pb.NewProxyWrapper(client.instance, &client.session)
 
 	traceId := uniqid.New(uniqid.Params{"traceid_", false})
-	if err := pw.Init(traceId, client.instance, common.SessionType_Client, client.GetStatus()); err != nil {
+	if err := pw.Init(traceId, client.instance, common.SessionType_Client, client.GetStatus(), client.httpsAddr); err != nil {
 		return emperror.Wrap(err, "cannot initialize client")
 	}
 	return nil
@@ -270,12 +302,12 @@ func (client *Client) ServeGRPC(listener net.Listener) error {
 	return nil
 }
 
-func (client *Client) getProxyDirector() (func(req *http.Request)) {
+func (client *Client) getProxyDirector() func(req *http.Request) {
 	target, _ := url.Parse("http://localhost:80/")
 	targetQuery := target.RawQuery
 	director := func(req *http.Request) {
-//		vars := mux.Vars(req)
-//		t := vars["target"]
+		//		vars := mux.Vars(req)
+		//		t := vars["target"]
 		req.URL.Scheme = target.Scheme
 		req.URL.Host = target.Host
 		req.URL.Path = common.SingleJoiningSlash(target.Path, req.URL.Path)
@@ -293,7 +325,6 @@ func (client *Client) getProxyDirector() (func(req *http.Request)) {
 
 	return director
 }
-
 
 func (client *Client) ServeHTTPExt() error {
 	r := mux.NewRouter()
@@ -313,10 +344,11 @@ func (client *Client) ServeHTTPExt() error {
 			return client.session.Open()
 		},
 	}
-	r.PathPrefix("/{target}/").Handler(proxy)
 
 	// add the websocket echo client
 	r.PathPrefix("/echo/").HandlerFunc(client.wsEcho())
+	r.PathPrefix("/ws/{group}").HandlerFunc(client.websocketGroup())
+	r.PathPrefix("/{target}/").Handler(proxy)
 
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -389,7 +421,6 @@ func (client *Client) ServeCmux() error {
 	client.cmuxServer = nil
 	return nil
 }
-
 
 func (client *Client) CloseServices() error {
 	if client.grpcServer != nil {

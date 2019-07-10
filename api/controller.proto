@@ -12,11 +12,12 @@ option java_package = "net.info-age.bremote.controller";
 message NewClientParam {
     string client = 1;
     string status = 2;
+    string httpAddr = 3;
 }
 
 service ControllerService {
     rpc Ping( String ) returns ( String ) {};
     rpc NewClient( NewClientParam ) returns ( google.protobuf.Empty ) {};
     rpc RemoveClient( String ) returns ( google.protobuf.Empty ) {};
-    rpc WebSocketMessage( Bytes ) returns (google.protobuf.Empty) {}
+    rpc WebsocketMessage( Bytes ) returns (google.protobuf.Empty) {}
 }

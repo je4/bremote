@@ -97,3 +97,17 @@ func (css ControllerServiceServer) RemoveClient(ctx context.Context, param *pb.S
 
 	return &empty.Empty{}, nil
 }
+
+func (css ControllerServiceServer) WebsocketMessage(ctx context.Context, req *pb.Bytes) (*empty.Empty, error) {
+	traceId, sourceInstance, targetGroup, err := common.RpcContextMetadata(ctx)
+	if err != nil {
+		css.log.Errorf("invalid metadata in call to %v: %v", "WebSocketMessage()", err)
+		return nil, status.Errorf(codes.Unavailable, fmt.Sprintf("invalid metadata in call to %v: %v", "WebSocketMessage()", err))
+	}
+
+	css.log.Infof("[%v] %v -> /ws() -> %v", traceId, sourceInstance, targetGroup)
+
+	// todo: send to local webservice of target group
+
+	return &empty.Empty{}, nil
+}

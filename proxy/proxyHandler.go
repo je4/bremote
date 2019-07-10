@@ -46,6 +46,7 @@ func (pss ProxyServiceServer) Init(ctx context.Context, param *pb.InitParam) (*e
 	}
 	client := param.GetInstance()
 	stat := param.GetStatus()
+	httpAddr := param.GetHttpAddr()
 
 	pss.log.Infof("[%v] %v -> /Init( %v, %v, %v )", traceId, sourceInstance,  client, pb.ProxySessionType_name[int32(param.GetSessionType())], stat)
 
@@ -72,7 +73,7 @@ func (pss ProxyServiceServer) Init(ctx context.Context, param *pb.InitParam) (*e
 
 			traceId = uniqid.New(uniqid.Params{"traceid_", false})
 			pss.log.Infof("[%v] announcing %v to %v", traceId, client, name)
-			if err := cw.NewClient(traceId, name, client, stat); err != nil {
+			if err := cw.NewClient(traceId, name, client, stat, httpAddr); err != nil {
 				pss.log.Errorf("[%v] error announcing %v to %v: %v", traceId, client, name, err)
 			}
 		}
@@ -140,7 +141,7 @@ func (pss ProxyServiceServer) GroupList(context.Context, *empty.Empty) (*pb.Grou
 	return result, nil
 }
 
-func (pss ProxyServiceServer) WebSocketMessage(ctx context.Context, req *pb.Bytes) (*empty.Empty, error) {
+func (pss ProxyServiceServer) WebsocketMessage(ctx context.Context, req *pb.Bytes) (*empty.Empty, error) {
 	traceId, sourceInstance, targetGroup, err := common.RpcContextMetadata(ctx)
 	if err != nil {
 		pss.log.Errorf("invalid metadata in call to %v: %v", "WebSocketMessage()", err)
@@ -160,8 +161,16 @@ func (pss ProxyServiceServer) WebSocketMessage(ctx context.Context, req *pb.Byte
 			pss.log.Errorf("client %v not active - cannot send websocket message: %v", instanceName, err )
 			continue
 		}
-
+		// every session has it's own grpc service
+		if session.GetSessionType() == common.SessionType_Client {
+			cw := pb.NewClientWrapper(pss.proxySession.GetInstance(), session.GetSessionPtr())
+			pss.log.Debugf("[%v] sending websocket message to %v", traceId, session.GetInstance())
+			err = cw.WebsocketMessage(traceId, sourceInstance, targetGroup, req.GetValue())
+			if err != nil {
+				pss.log.Errorf("[%v] sending websocket message to %v: %v", traceId, session.GetInstance(), err)
+			}
+		}
 	}
 
-	return nil, status.Errorf(codes.Unimplemented, "method WebSocketMessage not implemented")
+	return &empty.Empty{}, nil
 }

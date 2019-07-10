@@ -1,6 +1,6 @@
 logfile = "" # log file location
 loglevel = "DEBUG" # CRITICAL|ERROR|WARNING|NOTICE|INFO|DEBUG
-instancename = "client01" # instance name
+instancename = "client02" # instance name
 proxy = "localhost:7777" # proxy addr:port
 #proxy = "vpn-de2.info-age.net:80" # proxy addr:port
 certpem = "C:/daten/go/certs/bremote_client.pem" # tls client certificate file in PEM format
@@ -9,6 +9,6 @@ capem = "C:/daten/go/certs/bremote_ca.pem" # tls root certificate file in PEM fo
 httpscertpem = "C:/daten/go/certs/bremote_server.pem" # tls client certificate file in PEM format
 httpskeypem = "C:/daten/go/certs/bremote_server.key" # tls client key file in PEM format
 httpstatic = "C:/daten/go/src/github.com/je4/bremote/client/data/static" # folder for static html files
-httpsaddr = "localhost:443"
+httpsaddr = "localhost:444"
 httptemplates = "C:/daten/go/src/github.com/je4/bremote/client/data/templates" # folder for html templates
 

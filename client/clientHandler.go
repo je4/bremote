@@ -156,7 +156,7 @@ func (css ClientServiceServer) SetStatus(ctx context.Context, param *pb.String) 
 	return &empty.Empty{}, nil
 }
 
-func (css ClientServiceServer) WebSocketMessage(ctx context.Context, req *pb.Bytes) (*empty.Empty, error) {
+func (css ClientServiceServer) WebsocketMessage(ctx context.Context, req *pb.Bytes) (*empty.Empty, error) {
 	traceId, sourceInstance, targetGroup, err := common.RpcContextMetadata(ctx)
 	if err != nil {
 		css.log.Errorf("invalid metadata in call to %v: %v", "WebSocketMessage()", err)
@@ -165,7 +165,11 @@ func (css ClientServiceServer) WebSocketMessage(ctx context.Context, req *pb.Byt
 
 	css.log.Infof("[%v] %v -> /ws() -> %v", traceId, sourceInstance, targetGroup)
 
-	// todo: send to local webservice of target group
+	err = css.client.SendGroupWebsocket(targetGroup, req.GetValue())
+	if err != nil {
+		css.log.Errorf("cannot send message to %v: %v", targetGroup, err)
+		return nil, status.Errorf(codes.Internal, fmt.Sprintf("cannot send message to %v: %v", targetGroup, err))
+	}
 
 	return &empty.Empty{}, nil
 }

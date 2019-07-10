@@ -167,7 +167,7 @@ func (cw *ClientWrapper) SetStatus(traceId string, targetInstance string, stat s
 	return nil
 }
 
-func (cw *ClientWrapper) WebSocketMessage(traceId string, targetInstance string, data []byte) error {
+func (cw *ClientWrapper) WebsocketMessage(traceId string, sourceInstance string, targetInstance string, data []byte) error {
 	if traceId == "" {
 		traceId = uniqid.New(uniqid.Params{"traceid_", false})
 	}
@@ -175,8 +175,14 @@ func (cw *ClientWrapper) WebSocketMessage(traceId string, targetInstance string,
 		return emperror.Wrapf(err, "cannot connect to %v", targetInstance)
 	}
 
-	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", targetInstance, "traceId", traceId)
-	_, err := (*cw.clientServiceClient).WebSocketMessage(ctx, &Bytes{Value:data})
+	if sourceInstance == "" {
+		sourceInstance = cw.instanceName
+	}
+	ctx := metadata.AppendToOutgoingContext(context.Background(),
+		"sourceInstance", sourceInstance,
+		"targetInstance", targetInstance,
+		"traceId", traceId)
+	_, err := (*cw.clientServiceClient).WebsocketMessage(ctx, &Bytes{Value:data})
 	if err != nil {
 		return emperror.Wrapf(err, "error sending websocket message to %v", targetInstance)
 	}

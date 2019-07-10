@@ -1,8 +1,12 @@
 <html>
 <head>
-    <title>BRemote</title>
+    <title>BRemote: [[.title]]</title>
+    <script
+            src="https://code.jquery.com/jquery-3.4.1.min.js"
+            integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo="
+            crossorigin="anonymous"></script>
 <script>
-    var connection = new WebSocket('wss://localhost:443/echo/');
+    var connection = new WebSocket('[[.wsAddr]]/test/');
 
     // When the connection is open, send some data to the server
     connection.onopen = function () {
@@ -17,6 +21,7 @@
     // Log messages from the server
     connection.onmessage = function (e) {
         console.log('Server: ' + e.data);
+        $('#data').before('</br>'+e.data)
     };
 </script>
 </head>
@@ -24,5 +29,8 @@
 <h1>
 [[.title]]
 </h1>
+<pre>
+    <div id="data"></div>
+</pre>
 </body>
 </html>

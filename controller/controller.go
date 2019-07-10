@@ -16,7 +16,6 @@ import (
 	"github.com/op/go-logging"
 	"github.com/soheilhy/cmux"
 	"google.golang.org/grpc"
-	"html/template"
 	"io/ioutil"
 	"log"
 	"net"
@@ -25,6 +24,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"text/template"
 	"time"
 )
 
@@ -254,7 +254,7 @@ func (controller *Controller) InitProxy() error {
 	pw := pb.NewProxyWrapper(controller.instance, &controller.session)
 
 	traceId := uniqid.New(uniqid.Params{"traceid_", false})
-	if err := pw.Init(traceId, controller.instance, common.SessionType_Controller, common.ClientStatus_Empty); err != nil {
+	if err := pw.Init(traceId, controller.instance, common.SessionType_Controller, common.ClientStatus_Empty, controller.httpsAddr); err != nil {
 		return emperror.Wrap(err, "cannot initialize client")
 	}
 	return nil
@@ -311,7 +311,7 @@ func (controller *Controller) ServeHTTPExt() error {
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// Do stuff here
-			controller.log.Infof(r.RequestURI)
+			controller.log.Debugf(r.RequestURI)
 			// Call the next handler, which can be another middleware in the chain, or the final handler.
 			next.ServeHTTP(w, r)
 		})

@@ -208,7 +208,7 @@ func init() {
 func init() { proto.RegisterFile("client.proto", fileDescriptor_014de31d7ac8c57c) }
 
 var fileDescriptor_014de31d7ac8c57c = []byte{
-	// 402 bytes of a gzipped FileDescriptorProto
+	// 401 bytes of a gzipped FileDescriptorProto
 	0x1f, 0x8b, 0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0xff, 0x84, 0x93, 0x4f, 0x6f, 0xd3, 0x40,
 	0x10, 0xc5, 0x6d, 0x9c, 0x96, 0x66, 0xda, 0xaa, 0xd6, 0x0a, 0x81, 0xe5, 0x4a, 0x10, 0x7c, 0xca,
 	0x05, 0x57, 0x2a, 0x07, 0x2e, 0x48, 0x15, 0xa9, 0x0a, 0x45, 0x40, 0x54, 0xd9, 0x42, 0x48, 0x1c,
@@ -230,11 +230,11 @@ var fileDescriptor_014de31d7ac8c57c = []byte{
 	0xc3, 0x36, 0x9e, 0x70, 0x13, 0x4f, 0x78, 0x53, 0xc7, 0x13, 0x58, 0xec, 0x06, 0x8e, 0x36, 0xb4,
 	0xd8, 0x93, 0x7d, 0xa7, 0xbf, 0x48, 0x0e, 0xd8, 0x5c, 0xc3, 0x59, 0xfc, 0xbd, 0xa4, 0x6f, 0x6a,
 	0x95, 0x6f, 0xee, 0xea, 0x59, 0x1e, 0x30, 0xb9, 0x82, 0xf1, 0x1b, 0xec, 0x32, 0xe8, 0x95, 0x0f,
-	0xa1, 0xb9, 0x82, 0x71, 0xfc, 0xc7, 0xa0, 0x9f, 0xee, 0x10, 0x0d, 0xf7, 0x13, 0x26, 0xb1, 0x5a,
-	0xfc, 0x40, 0xfa, 0x80, 0xc6, 0x70, 0x81, 0xec, 0xd1, 0x3f, 0xf8, 0xae, 0x09, 0x07, 0xa0, 0xce,
-	0x02, 0x38, 0xcf, 0x91, 0x1a, 0xdd, 0xb3, 0x6d, 0x5d, 0xfb, 0x0f, 0x7d, 0x76, 0x78, 0x21, 0x93,
-	0xc3, 0x46, 0xf5, 0xfc, 0x77, 0x00, 0x00, 0x00, 0xff, 0xff, 0x93, 0x96, 0xf7, 0x2c, 0x59, 0x03,
-	0x00, 0x00,
+	0xa1, 0xb9, 0x82, 0x71, 0xfc, 0xc7, 0xa0, 0x9f, 0xee, 0x10, 0x0d, 0xf7, 0x13, 0x26, 0x46, 0x2d,
+	0x7e, 0x20, 0x7d, 0x40, 0x63, 0xb8, 0x40, 0xf6, 0xe8, 0x1f, 0x7c, 0xd7, 0x84, 0x03, 0x50, 0x67,
+	0x01, 0x9c, 0xe7, 0x48, 0x8d, 0xee, 0xd9, 0xb6, 0xae, 0xfd, 0x87, 0x3e, 0x3b, 0xbc, 0x90, 0xc9,
+	0x61, 0xa3, 0x7a, 0xfe, 0x3b, 0x00, 0x00, 0xff, 0xff, 0x44, 0xf6, 0xe8, 0x52, 0x59, 0x03, 0x00,
+	0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -255,7 +255,7 @@ type ClientServiceClient interface {
 	ShutdownBrowser(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*empty.Empty, error)
 	GetStatus(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*String, error)
 	SetStatus(ctx context.Context, in *String, opts ...grpc.CallOption) (*empty.Empty, error)
-	WebSocketMessage(ctx context.Context, in *Bytes, opts ...grpc.CallOption) (*empty.Empty, error)
+	WebsocketMessage(ctx context.Context, in *Bytes, opts ...grpc.CallOption) (*empty.Empty, error)
 }
 
 type clientServiceClient struct {
@@ -320,9 +320,9 @@ func (c *clientServiceClient) SetStatus(ctx context.Context, in *String, opts ..
 	return out, nil
 }
 
-func (c *clientServiceClient) WebSocketMessage(ctx context.Context, in *Bytes, opts ...grpc.CallOption) (*empty.Empty, error) {
+func (c *clientServiceClient) WebsocketMessage(ctx context.Context, in *Bytes, opts ...grpc.CallOption) (*empty.Empty, error) {
 	out := new(empty.Empty)
-	err := c.cc.Invoke(ctx, "/info_age.bremote.ClientService/WebSocketMessage", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/info_age.bremote.ClientService/WebsocketMessage", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -337,7 +337,7 @@ type ClientServiceServer interface {
 	ShutdownBrowser(context.Context, *empty.Empty) (*empty.Empty, error)
 	GetStatus(context.Context, *empty.Empty) (*String, error)
 	SetStatus(context.Context, *String) (*empty.Empty, error)
-	WebSocketMessage(context.Context, *Bytes) (*empty.Empty, error)
+	WebsocketMessage(context.Context, *Bytes) (*empty.Empty, error)
 }
 
 // UnimplementedClientServiceServer can be embedded to have forward compatible implementations.
@@ -362,8 +362,8 @@ func (*UnimplementedClientServiceServer) GetStatus(ctx context.Context, req *emp
 func (*UnimplementedClientServiceServer) SetStatus(ctx context.Context, req *String) (*empty.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SetStatus not implemented")
 }
-func (*UnimplementedClientServiceServer) WebSocketMessage(ctx context.Context, req *Bytes) (*empty.Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method WebSocketMessage not implemented")
+func (*UnimplementedClientServiceServer) WebsocketMessage(ctx context.Context, req *Bytes) (*empty.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WebsocketMessage not implemented")
 }
 
 func RegisterClientServiceServer(s *grpc.Server, srv ClientServiceServer) {
@@ -478,20 +478,20 @@ func _ClientService_SetStatus_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ClientService_WebSocketMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _ClientService_WebsocketMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Bytes)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ClientServiceServer).WebSocketMessage(ctx, in)
+		return srv.(ClientServiceServer).WebsocketMessage(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/info_age.bremote.ClientService/WebSocketMessage",
+		FullMethod: "/info_age.bremote.ClientService/WebsocketMessage",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ClientServiceServer).WebSocketMessage(ctx, req.(*Bytes))
+		return srv.(ClientServiceServer).WebsocketMessage(ctx, req.(*Bytes))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -525,8 +525,8 @@ var _ClientService_serviceDesc = grpc.ServiceDesc{
 			Handler:    _ClientService_SetStatus_Handler,
 		},
 		{
-			MethodName: "WebSocketMessage",
-			Handler:    _ClientService_WebSocketMessage_Handler,
+			MethodName: "WebsocketMessage",
+			Handler:    _ClientService_WebsocketMessage_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
