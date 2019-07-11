@@ -1,0 +1,3 @@
+[submodule "controller/data/static/vendor/animejs"]
+	path = controller/data/static/vendor/animejs
+	url = https://github.com/juliangarnier/anime.git
