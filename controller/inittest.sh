@@ -5,7 +5,7 @@
 echo set https://localhost:8443/kvstore/client01/wstest.html to '{"title":"Client 01","wsAddr":"wss://localhost:443/ws"}'
 curl --header "Content-Type: application/json" \
   --request PUT \
-  --data '{"title":"Client 01","wsAddr":"wss://localhost:443/ws"}' \
+  --data @client01_kv.json \
   --insecure \
   https://localhost:8443/kvstore/client01/wstest.html
 echo ""
@@ -16,7 +16,7 @@ echo ""
 echo set https://localhost:8443/kvstore/client02/wstest.html to '{"title":"Client 02","wsAddr":"wss://localhost:444/ws"}'
 curl --header "Content-Type: application/json" \
   --request PUT \
-  --data '{"title":"Client 02","wsAddr":"wss://localhost:444/ws"}' \
+  --data @client02_kv.json \
   --insecure \
   https://localhost:8443/kvstore/client02/wstest.html
 echo ""
@@ -27,7 +27,7 @@ echo ""
 echo set https://localhost:8443/kvstore/mac02/wstest.html to '{"title":"Mac 02","wsAddr":"wss://localhost:443/ws"}'
 curl --header "Content-Type: application/json" \
   --request PUT \
-  --data '{"title":"Mac 02","wsAddr":"wss://localhost:443/ws"}' \
+  --data @mac02_kv.json \
   --insecure \
   https://localhost:8443/kvstore/mac02/wstest.html
 echo ""

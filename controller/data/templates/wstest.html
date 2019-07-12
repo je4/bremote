@@ -5,25 +5,80 @@
             src="https://code.jquery.com/jquery-3.4.1.min.js"
             integrity="sha256-CSXorXvZcTkaix6Yvo6HppcZGetbYMGWSFlBw8HfCJo="
             crossorigin="anonymous"></script>
-<script>
-    var connection = new WebSocket('[[.wsAddr]]/test/');
+    <script src="../static/vendor/animejs/lib/anime.min.js"></script>
+    <script>
 
-    // When the connection is open, send some data to the server
-    connection.onopen = function () {
-        connection.send('Ping'); // Send the message 'Ping' to the server
-    };
+    let imageURLs = [
+        [[range $val := .images]]'[[$val.masterurl]]', [[end]]
+    ];
 
-    // Log errors
-    connection.onerror = function (error) {
-        console.log('WebSocket Error ' + error);
-    };
+    let xPos = [[.xPos]];
+    let screenNo = [[.screenNo]];
 
-    // Log messages from the server
-    connection.onmessage = function (e) {
-        console.log('Server: ' + e.data);
-        $('#data').before('</br>'+e.data)
-    };
+    let viewPortWidth = $( window ).width();
+    let viewPortHeight = $( window ).height();
+
+    let screens = ['.d1', '.d2', '.d3'];
+
+    $('document').ready(function(){
+        var connection = new WebSocket('[[.wsAddr]]/test/');
+
+        // When the connection is open, send some data to the server
+        connection.onopen = function () {
+            connection.send('Ping'); // Send the message 'Ping' to the server
+        };
+
+        // Log errors
+        connection.onerror = function (error) {
+            console.log('WebSocket Error ' + error);
+        };
+
+        // Log messages from the server
+        connection.onmessage = function (e) {
+            console.log('Server: ' + e.data);
+            $('#data').before('</br>'+e.data)
+        };
+
+        $(".imageholder").css({
+            position:   'fixed', // Optional if #myDiv is already absolute
+//            visibility: 'hidden',
+            display:    'inline',
+            top:        '0',
+            left:       '0',
+            width: viewPortWidth,
+            height: viewPortHeight,
+            border: '1px solid black',
+            backgroundColor: 'yellow',
+        });
+
+        screens.forEach(function (screen, index) {
+            $(screen).css({
+                left: (index-1)*viewPortWidth,
+            });
+        });
+        animate(screenNo, 0);
+    });
+
+    function animate(imageNo, screenNo ) {
+        for( let i = 0; i < 3; i++) {
+            let img = (imageNo + i) % imageURLs.length;
+            let scr = (screenNo + i) % 3;
+            $(screens[i]).html('Screen #'+scr + ' / Image #'+img);
+        }
+
+        var tl = anime.timeline({
+            direction: 'alternate',
+            loop: true,
+            duration: 5000,
+            easing: 'linear',
+            complete: function(anim) {
+                console.log( 'animation done' );
+            }
+        });
+    }
 </script>
+    <style>
+    </style>
 </head>
 <body>
 <h1>
@@ -32,5 +87,8 @@
 <pre>
     <div id="data"></div>
 </pre>
+<div class="imageholder" id="d1"></div>
+<div class="imageholder" id="d2"></div>
+<div class="imageholder" id="d3"></div>
 </body>
 </html>

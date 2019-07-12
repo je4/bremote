@@ -27,7 +27,7 @@ func (controller *Controller) RestLogger() func(next http.Handler) http.Handler 
 	}
 }
 
-func (controller *Controller) addRestRoutes( r *mux.Router) {
+func (controller *Controller) addRestRoutes(r *mux.Router) {
 	r.HandleFunc("/", dummy)
 	r.HandleFunc("/groups", controller.RestGroupList()).Methods("GET")
 	r.HandleFunc("/groups/{group}", controller.RestGroupGetMember()).Methods("GET")
@@ -50,10 +50,9 @@ func (controller *Controller) RestGroupList() func(w http.ResponseWriter, r *htt
 		traceId := uniqid.New(uniqid.Params{"traceid_", false})
 		list, err := pw.GroupList(traceId)
 		if err != nil {
-			controller.log.Errorf( "cannot get proxy group list: %v", err)
+			controller.log.Errorf("cannot get proxy group list: %v", err)
 			http.Error(w, fmt.Sprintf("cannot get proxy group list: %v", err), http.StatusInternalServerError)
 		}
-
 
 		json, err := json.Marshal(list)
 		if err != nil {
@@ -76,10 +75,9 @@ func (controller *Controller) RestGroupGetMember() func(w http.ResponseWriter, r
 		traceId := uniqid.New(uniqid.Params{"traceid_", false})
 		list, err := pw.GroupGetMembers(traceId, group)
 		if err != nil {
-			controller.log.Errorf( "cannot get members of group %v: %v", group, err)
+			controller.log.Errorf("cannot get members of group %v: %v", group, err)
 			http.Error(w, fmt.Sprintf("cannot get members of group %v: %v", group, err), http.StatusInternalServerError)
 		}
-
 
 		json, err := json.Marshal(list)
 		if err != nil {
@@ -129,7 +127,7 @@ func (controller *Controller) RestGroupAddInstance() func(w http.ResponseWriter,
 		traceId := uniqid.New(uniqid.Params{"traceid_", false})
 		err = pw.GroupAddInstance(traceId, group, instance)
 		if err != nil {
-			controller.log.Errorf( "cannot add instance %v to group %v: %v", instance, group, err)
+			controller.log.Errorf("cannot add instance %v to group %v: %v", instance, group, err)
 			http.Error(w, fmt.Sprintf("cannot add instance %v to group %v: %v", instance, group, err), http.StatusInternalServerError)
 		}
 
@@ -148,7 +146,7 @@ func (controller *Controller) RestGroupDelete() func(w http.ResponseWriter, r *h
 		traceId := uniqid.New(uniqid.Params{"traceid_", false})
 		err := pw.GroupDelete(traceId, group)
 		if err != nil {
-			controller.log.Errorf( "cannot delete group %v: %v", group, err)
+			controller.log.Errorf("cannot delete group %v: %v", group, err)
 			http.Error(w, fmt.Sprintf("cannot delete group %v: %v", group, err), http.StatusInternalServerError)
 		}
 
@@ -156,7 +154,6 @@ func (controller *Controller) RestGroupDelete() func(w http.ResponseWriter, r *h
 		io.WriteString(w, `"status":"ok"`)
 	}
 }
-
 
 func (controller *Controller) RestClientList() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -291,7 +288,7 @@ func (controller *Controller) RestClientNavigate() func(w http.ResponseWriter, r
 		params := data.(map[string]interface{})
 		u, err := url.Parse(params["url"].(string))
 		if err != nil {
-			controller.log.Errorf( "cannot parse url %v: %v", params["url"].(string), err)
+			controller.log.Errorf("cannot parse url %v: %v", params["url"].(string), err)
 			http.Error(w, fmt.Sprintf("cannot parse url %v: %v", params["url"].(string), err), http.StatusInternalServerError)
 		}
 		nextStatus := params["nextstatus"].(string)
@@ -302,7 +299,7 @@ func (controller *Controller) RestClientNavigate() func(w http.ResponseWriter, r
 		traceId := uniqid.New(uniqid.Params{"traceid_", false})
 		err = cw.Navigate(traceId, client, u, nextStatus)
 		if err != nil {
-			controller.log.Errorf( "cannot navigate to %v: %v", u.String(), err)
+			controller.log.Errorf("cannot navigate to %v: %v", u.String(), err)
 			http.Error(w, fmt.Sprintf("cannot navigate to %v: %v", u.String(), err), http.StatusInternalServerError)
 		}
 

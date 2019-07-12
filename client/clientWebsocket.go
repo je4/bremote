@@ -125,8 +125,9 @@ func (cws *ClientWebsocket) writePump() {
 				cws.client.log.Errorf("ping message failed: %v", err)
 				// remove inactive group connection
 //				cws.client.DeleteGroupWebsocket(cws.group)
-//				return
+				return
 			}
+			cws.client.log.Debug("websocket ping")
 		}
 	}
 	// remove inactive group connection
