@@ -5,3 +5,4 @@ certpem = "C:/daten/go/certs/bremote_server.pem" # tls server certificate file i
 keypem = "C:/daten/go/certs/bremote_server.key" # tls server key file in PEM format
 capem = "C:/daten/go/certs/bremote_ca.pem" # tls root certificate file in PEM format
 tlsaddr = "localhost:7777" # listen address for incoming raw tls connections
+webroot = "C:/daten/go/src/github.com/je4/bremote/proxy/htdocs"

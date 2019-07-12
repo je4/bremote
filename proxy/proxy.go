@@ -7,7 +7,10 @@ import (
 	"github.com/goph/emperror"
 	"github.com/hashicorp/yamux"
 	"github.com/op/go-logging"
+	"github.com/soheilhy/cmux"
 	"io/ioutil"
+	"net"
+	"net/http"
 	"reflect"
 	"sync"
 )
@@ -25,6 +28,7 @@ type Proxy struct {
 	tlsCfg   *tls.Config
 	sessions map[string]*ProxySession
 	groups   *InstanceGroups
+	webRoot  string
 
 	sync.RWMutex
 }
@@ -41,6 +45,7 @@ func NewProxy(config Config, log *logging.Logger) (*Proxy, error) {
 		keyFile:  config.KeyPEM,
 		sessions: make(map[string]*ProxySession),
 		groups:   NewInstanceGroups(),
+		webRoot:  config.WebRoot,
 	}
 	if err := proxy.Init(); err != nil {
 		return nil, emperror.Wrap(err, "cannot connect")
@@ -176,16 +181,56 @@ func (proxy *Proxy) RenameSession(oldname string, newname string) error {
 
 func (proxy *Proxy) ListenServe() (err error) {
 
-	listener, err := tls.Listen("tcp", proxy.addr, proxy.tlsCfg)
+	listener, err := net.Listen("tcp", proxy.addr)
 	if err != nil {
 		return emperror.Wrapf(err, "cannot start tcp listener on %v", proxy.addr)
 	}
 	defer listener.Close()
 
+	// da mux
+	m := cmux.New(listener)
+
+	httpL := m.Match(cmux.HTTP1Fast())
+	tlsL := m.Match(cmux.Any())
+
+	/**
+	listener, err := tls.Listen("tcp", proxy.addr, proxy.tlsCfg)
+	if err != nil {
+		return emperror.Wrapf(err, "cannot start tcp listener on %v", proxy.addr)
+	}
+	defer listener.Close()
+	*/
+
+	go func() {
+		http.Handle("/", http.FileServer(http.Dir(proxy.webRoot)))
+		proxy.log.Infof("Serving folder %v on %v\n", proxy.webRoot, proxy.addr)
+		if err := http.Serve(httpL, nil); err != nil {
+			proxy.log.Errorf("couldnt serve http: %v", err)
+		} else {
+			proxy.log.Infof("http server shutdown: %v", err)
+		}
+	}()
+
+	go func() {
+		proxy.log.Infof("Serving tls on %v\n", proxy.addr)
+		if err := proxy.Serve(tlsL); err != nil {
+			proxy.log.Errorf("couldnt serve tls: %v", err)
+		} else {
+			proxy.log.Infof("tls server shutdown: %v", err)
+		}
+	}()
+	m.Serve()
+	return
+}
+
+func( proxy *Proxy) Serve( listener net.Listener) error {
+	tlsListener := tls.NewListener(listener, proxy.tlsCfg)
+	defer tlsListener.Close()
+
 	for {
 		proxy.log.Infof("waiting for incoming TLS connections on %v", proxy.addr)
 		// Accept blocks until there is an incoming TCP connection
-		incoming, err := listener.Accept()
+		incoming, err := tlsListener.Accept()
 		if err != nil {
 			return emperror.Wrap(err, "couldn't accept incoming connection")
 		}
@@ -215,7 +260,7 @@ func (proxy *Proxy) ListenServe() (err error) {
 		proxy.log.Info("launching a gRPC server over incoming TCP connection")
 		go proxy.ServeSession(session)
 	}
-	return
+	return nil
 }
 
 func (proxy *Proxy) ServeSession(session *yamux.Session) error {

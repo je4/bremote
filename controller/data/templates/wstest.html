@@ -18,7 +18,11 @@
     let viewPortWidth = $( window ).width();
     let viewPortHeight = $( window ).height();
 
-    let screens = ['.d1', '.d2', '.d3'];
+    let screens = ['#d1', '#d2', '#d3'];
+    let colors = [];
+    colors['#d1'] = 'green';
+    colors['#d2'] = 'yellow';
+    colors['#d3'] = 'blue';
 
     $('document').ready(function(){
         var connection = new WebSocket('[[.wsAddr]]/test/');
@@ -54,6 +58,7 @@
         screens.forEach(function (screen, index) {
             $(screen).css({
                 left: (index-1)*viewPortWidth,
+                backgroundColor: colors[screen],
             });
         });
         animate(screenNo, 0);

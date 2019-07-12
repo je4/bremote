@@ -13,6 +13,7 @@ type Config struct {
 	KeyPEM       string
 	CaPEM        string
 	TLSAddr      string
+	WebRoot      string
 }
 
 func LoadConfig(filepath string) Config {
