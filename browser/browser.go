@@ -53,6 +53,10 @@ func (browser *Browser) Init(execOptions map[string]interface{}) error {
 	return browser.init()
 }
 
+func (browser *Browser) IsRunning() bool {
+	return browser.taskCtx.Err() == nil
+}
+
 func (browser *Browser) Tasks(tasks chromedp.Tasks) error {
 	if err := browser.taskCtx.Err(); err != nil {
 		if err := browser.init(); err != nil {
