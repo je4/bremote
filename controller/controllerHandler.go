@@ -71,8 +71,14 @@ func (css ControllerServiceServer) NewClient(ctx context.Context, param *pb.NewC
 			"allow-insecure-localhost":            true,
 			"enable-immersive-fullscreen-toolbar": true,
 			"views-browser-windows":               false,
-			"enable-fullscreen-toolbar-reveal":    true,
 			"kiosk":                               true,
+			"disable-session-crashed-bubble":      true,
+			"incognito":                           true,
+			"disable-features":                    "InfiniteSessionRestore",
+			//"no-first-run":                        true,
+			"enable-fullscreen-toolbar-reveal": false,
+			"useAutomationExtension":           false,
+			"enable-automation":                false,
 		}
 
 		traceId = uniqid.New(uniqid.Params{"traceid_", false})
