@@ -1,0 +1,79 @@
+<html>
+<head>
+    <title>
+        Impressions from HGK Archive
+    </title>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            background-color: black;
+            overflow: hidden;
+        }
+        #heading_w {
+            position: fixed;
+            bottom: 5px;
+            right: 5px;
+            color: white;
+            font-size: 36px;
+            font-family: "arial";
+        }
+        #heading_b {
+            position: fixed;
+            bottom: 2px;
+            right: 2px;
+            color: black;
+            font-size: 36px;
+            font-family: "arial";
+        }
+        .slides {
+            display: none;
+            width: 100%;
+        }
+
+        .animate-left {
+            position: relative;
+            animation: animateleft 1.2s
+        }
+
+        @keyframes animateleft {
+            from { left :-500px; opacity:0 } to { left:0; opacity:1 }
+        }
+    </style>
+    <script>
+        var simpleSlides = function () {
+            var i;
+            var slides = document.querySelectorAll(".slides");
+            for (i = 0; i < slides.length; i++) {
+                slides[i].setAttribute("style","display:none");
+            }
+            count++;
+            if (count > slides.length) { count = 1; }
+            slides[count-1].setAttribute("style","display:block");
+            setTimeout(simpleSlides, 5000);
+        };
+
+        document.addEventListener("DOMContentLoaded", function(){
+            simpleSlides();
+        });
+
+        var count = 0;
+
+    </script>
+</head>
+<body>
+<div class="simpleSlides">
+    [[range $val := .images]]<img class="slides animate-left" src="[[$val.masterurl]]">
+    [[end]]
+</div>
+
+<div class="fade-out" id="image">
+</div>
+<div id="heading_b">
+   [[.title]]
+</div>
+<div id="heading_w">
+    [[.title]]
+</div>
+</body>
+</html>

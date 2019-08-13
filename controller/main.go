@@ -107,15 +107,6 @@ func main() {
 			}
 			controller.SetVar(client.InstanceName+"-wstest.html", data)
 
-			/* not necessary because GetClients was called withStatus
-			traceId := uniqid.New(uniqid.Params{"traceid_", false})
-			ret, err := cw.Ping(traceId, client.InstanceName)
-			if err != nil {
-				log.Errorf("[%v] error pinging %v: %v", traceId, client.InstanceName, err)
-				continue
-			}
-			log.Infof("[%v] ping result from %v: %v", traceId, client.InstanceName, ret)
-			*/
 			if client.Status == common.ClientStatus_Empty {
 				opts := map[string]interface{}{
 					"headless":                            false,
@@ -126,8 +117,14 @@ func main() {
 					"allow-insecure-localhost":            true,
 					"enable-immersive-fullscreen-toolbar": true,
 					"views-browser-windows":               false,
-					"enable-fullscreen-toolbar-reveal":    true,
 					"kiosk":                               true,
+					"disable-session-crashed-bubble":      true,
+					"incognito":                           true,
+					"disable-features":                    "InfiniteSessionRestore",
+					//"no-first-run":                        true,
+					"enable-fullscreen-toolbar-reveal": false,
+					"useAutomationExtension":           false,
+					"enable-automation":                false,
 				}
 
 				traceId = uniqid.New(uniqid.Params{"traceid_", false})
@@ -137,28 +134,6 @@ func main() {
 				}
 			}
 		}
-
-		/*
-			time.Sleep(time.Second * 15)
-			if controller.session == nil {
-				log.Error("session connection not available")
-				return
-			}
-			traceId = uniqid.New(uniqid.Params{"traceid_", false})
-			clients, err = pw.GetClients(traceId, common.SessionType_Client, false)
-			if err != nil {
-				log.Errorf("[%v] cannot get clients: %v", traceId, err)
-			}
-			log.Infof("Clients: %v", clients)
-			for _, client := range clients {
-				traceId = uniqid.New(uniqid.Params{"traceid_", false})
-				log.Infof("[%v] shutting down browser of %v", traceId, client)
-				if err := cw.ShutdownBrowser(traceId, client.InstanceName); err != nil {
-					log.Errorf("error shutting down browser of %v: %v", client, err)
-					continue
-				}
-			}
-		*/
 	}()
 
 	if err := controller.Serve(); err != nil {
