@@ -9,6 +9,7 @@
             margin: 0;
             background-color: black;
             overflow: hidden;
+            cursor: none;
         }
         #heading_w {
             position: fixed;
@@ -50,7 +51,7 @@
             count++;
             if (count > slides.length) { count = 1; }
             slides[count-1].setAttribute("style","display:block");
-            setTimeout(simpleSlides, 5000);
+            setTimeout(simpleSlides, [[.delay]]000);
         };
 
         document.addEventListener("DOMContentLoaded", function(){

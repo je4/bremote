@@ -15,7 +15,7 @@ httpskeypem = "C:/daten/go/certs/mediathek_server.key" # tls client key file in 
 #capem = "C:/daten/go/certs/bremote_ca.pem" # tls root certificate file in PEM format
 #httpscertpem = "C:/daten/go/certs/bremote_server.pem" # tls client certificate file in PEM format
 #httpskeypem = "C:/daten/go/certs/bremote_server.key" # tls client key file in PEM format
-httpsaddr = "localhost:8443"
+httpsaddr = "localhost:8444"
 httpstatic = "C:/daten/go/src/github.com/je4/bremote/controller/data/static" # folder for static html files
 
 [templates]
