@@ -221,3 +221,107 @@ func (cw *ProxyWrapper) WebsocketMessage(traceId string, targetGroup string, dat
 	return nil
 
 }
+
+func (cw *ProxyWrapper) KVStoreSetValue(client string, key string, value string, traceId string) (error) {
+	if traceId == "" {
+		traceId = uniqid.New(uniqid.Params{"traceid_", false})
+	}
+	if err := cw.connect(); err != nil {
+		return emperror.Wrapf(err, "cannot connect")
+	}
+
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "traceid", traceId)
+	_, err := (*cw.proxyServiceClient).KVStoreSetValue(ctx, &KVSetValueMessage{
+		Key:                  &KVKeyMessage{
+			Client:               client,
+			Key:                  key,
+		},
+		Value:                value,
+	})
+	if err != nil {
+		return emperror.Wrapf(err, "[%v] error setting %s-%s to %s", traceId, client, key, value)
+	}
+	return nil
+}
+
+func (cw *ProxyWrapper) KVStoreGetValue(client string, key string, traceId string) (string, error) {
+	if traceId == "" {
+		traceId = uniqid.New(uniqid.Params{"traceid_", false})
+	}
+	if err := cw.connect(); err != nil {
+		return "", emperror.Wrapf(err, "cannot connect")
+	}
+
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "traceid", traceId)
+	ret, err := (*cw.proxyServiceClient).KVStoreGetValue(ctx, &KVKeyMessage{
+			Client:               client,
+			Key:                  key,
+		})
+	if err != nil {
+		return "", emperror.Wrapf(err, "[%v] error getting %s-%s", traceId, client, key)
+	}
+	return ret.GetValue(), nil
+}
+
+
+func (cw *ProxyWrapper) KVStoreDeleteValue(client string, key string, traceId string) (error) {
+	if traceId == "" {
+		traceId = uniqid.New(uniqid.Params{"traceid_", false})
+	}
+	if err := cw.connect(); err != nil {
+		return emperror.Wrapf(err, "cannot connect")
+	}
+
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "traceid", traceId)
+	_, err := (*cw.proxyServiceClient).KVStoreDeleteValue(ctx, &KVKeyMessage{
+		Client:               client,
+		Key:                  key,
+	})
+	if err != nil {
+		return emperror.Wrapf(err, "[%v] error getting %s-%s", traceId, client, key)
+	}
+	return nil
+}
+
+func (cw *ProxyWrapper) KVStoreList(traceId string) (*map[string]string, error) {
+	if traceId == "" {
+		traceId = uniqid.New(uniqid.Params{"traceid_", false})
+	}
+	if err := cw.connect(); err != nil {
+		return &map[string]string{}, emperror.Wrapf(err, "cannot connect")
+	}
+
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "traceid", traceId)
+	ret, err := (*cw.proxyServiceClient).KVStoreList(ctx, &empty.Empty{})
+	if err != nil {
+		return &map[string]string{}, emperror.Wrapf(err, "[%v] error getting kv store list", traceId)
+	}
+	result := map[string]string{}
+	for _, val := range ret.GetData() {
+		k := val.GetKey()
+		key := fmt.Sprintf("%s-%s", k.GetClient(), k.GetKey())
+		result[key] = val.GetValue()
+	}
+	return &result, nil
+}
+
+func (cw *ProxyWrapper) KVStoreClientList(client string, traceId string) (*map[string]string, error) {
+	if traceId == "" {
+		traceId = uniqid.New(uniqid.Params{"traceid_", false})
+	}
+	if err := cw.connect(); err != nil {
+		return &map[string]string{}, emperror.Wrapf(err, "cannot connect")
+	}
+
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "traceid", traceId)
+	ret, err := (*cw.proxyServiceClient).KVStoreClientList(ctx, &String{Value:client})
+	if err != nil {
+		return &map[string]string{}, emperror.Wrapf(err, "[%v] error getting kv store list", traceId)
+	}
+	result := &map[string]string{}
+	for _, val := range ret.GetData() {
+		k := val.GetKey()
+		(*result)[k.GetKey()] = val.GetValue()
+	}
+	return result, nil
+}

@@ -11,6 +11,7 @@ import (
 	"github.com/op/go-logging"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"net/url"
 	"time"
 )
 
@@ -86,6 +87,34 @@ func (css ControllerServiceServer) NewClient(ctx context.Context, param *pb.NewC
 		if err := cw.StartBrowser(traceId, client, &opts); err != nil {
 			css.log.Errorf("[%v] error starting client browser on %v: %v", traceId, client, err)
 		}
+
+		// check for autonavigation
+		data, err := css.controller.GetVar(client, "autonav")
+		if err == nil {
+			autonav := data.(map[string]interface{})
+			// check for url
+			urlstring, ok := autonav["url"]
+			if !ok {
+				return
+			}
+			u, err := url.Parse(urlstring.(string))
+			if err != nil {
+				css.log.Errorf("cannot parse url %v: %v", urlstring.(string), err)
+				return
+			}
+			nextStatus := autonav["nextstatus"].(string)
+			css.log.Infof("%v::NewClient(%v) - autonav: %v -> %v", client, u.String(), nextStatus)
+
+			cw := pb.NewClientWrapper(css.controller.instance, css.controller.GetSessionPtr())
+			traceId := uniqid.New(uniqid.Params{"traceid_", false})
+			err = cw.Navigate(traceId, client, u, nextStatus)
+			if err != nil {
+				css.log.Errorf("cannot navigate to %v: %v", u.String(), err)
+				return
+			}
+
+		}
+
 	}()
 
 	return &empty.Empty{}, nil

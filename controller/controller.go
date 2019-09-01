@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
+	"encoding/json"
 	"fmt"
 	"github.com/bluele/gcache"
 	"github.com/goph/emperror"
@@ -91,21 +91,47 @@ func (controller *Controller) GetSessionPtr() **yamux.Session {
 	return &controller.session
 }
 
-func (controller *Controller) SetVar(key string, value interface{}) {
-	controller.kvs[key] = value
-}
+func (controller *Controller) SetVar(client string, key string, value interface{}) error {
+	pw := pb.NewProxyWrapper(controller.instance, controller.GetSessionPtr())
+	traceId := uniqid.New(uniqid.Params{"traceid_", false})
 
-func (controller *Controller) DeleteVar(key string) {
-	delete(controller.kvs, key)
-}
-
-func (controller *Controller) GetVar(key string) (interface{}, error) {
-	ret, ok := controller.kvs[key]
-	if !ok {
-		var r interface{}
-		return r, errors.New(fmt.Sprintf("no value found for key %v", key))
+	json, err := json.Marshal(value)
+	if err != nil {
+		return emperror.Wrapf(err, "cannot encode data: %v", err)
 	}
-	return ret, nil
+
+	err = pw.KVStoreSetValue(client, key, string(json), traceId)
+	if err != nil {
+		return emperror.Wrapf(err, "cannot get value for %s", key)
+	}
+	return nil
+}
+
+func (controller *Controller) DeleteVar(client string, key string) error {
+	pw := pb.NewProxyWrapper(controller.instance, controller.GetSessionPtr())
+	traceId := uniqid.New(uniqid.Params{"traceid_", false})
+	err := pw.KVStoreDeleteValue(client, key, traceId)
+	if err != nil {
+		return emperror.Wrapf(err, "cannot get value for %s", key)
+	}
+	return nil
+}
+
+func (controller *Controller) GetVar(client string, key string) (interface{}, error) {
+
+	pw := pb.NewProxyWrapper(controller.instance, controller.GetSessionPtr())
+	traceId := uniqid.New(uniqid.Params{"traceid_", false})
+	value, err := pw.KVStoreGetValue(client, key, traceId)
+	if err != nil {
+		return nil, emperror.Wrapf(err, "cannot get value for %s", key)
+	}
+	var data interface{}
+	err = json.Unmarshal([]byte(value), &data)
+	if err != nil {
+		return nil, emperror.Wrapf(err, "cannot decode data: %v", value)
+	}
+
+	return data, nil
 }
 
 func (controller *Controller) Connect() (err error) {
@@ -115,7 +141,14 @@ func (controller *Controller) Connect() (err error) {
 	// default root set of the current operating system.
 	if controller.roots == nil {
 		controller.roots = x509.NewCertPool()
-		ok := controller.roots.AppendCertsFromPEM([]byte(rootPEM))
+		// todo: get rid of this...in a safe way
+
+
+		rootCert, err := ioutil.ReadFile(controller.httpsCertFile)
+		if err != nil {
+			controller.log.Panicf("error reading root certificate %v: %v", controller.httpsCertFile, err)
+		}
+		ok := controller.roots.AppendCertsFromPEM(rootCert)
 		if !ok {
 			panic("failed to parse root certificate")
 		}
@@ -340,8 +373,7 @@ func (controller *Controller) templateHandler() func(w http.ResponseWriter, r *h
 		// get source instance
 		source := r.Header.Get("X-Source-Instance")
 
-		key := fmt.Sprintf("%s-%s", source, filepath.Base(file))
-		v, err := controller.GetVar(key)
+		v, err := controller.GetVar(source, filepath.Base(file))
 		if err != nil {
 			controller.log.Errorf("cannot execute template without data: %v", err)
 			http.Error(w, fmt.Sprintf("cannot execute template without data: %v", err), http.StatusNotFound)
@@ -350,6 +382,7 @@ func (controller *Controller) templateHandler() func(w http.ResponseWriter, r *h
 		data := v.(map[string]interface{})
 
 		var tmpl *template.Template
+		key := fmt.Sprintf("%s-%s", source, filepath.Base(file))
 		h, err := controller.templateCache.Get(key)
 		if err != nil {
 			tpldata, err := ioutil.ReadFile(file)

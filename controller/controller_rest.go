@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 )
 
 func dummy(w http.ResponseWriter, r *http.Request) {
@@ -179,6 +178,23 @@ func (controller *Controller) RestClientList() func(w http.ResponseWriter, r *ht
 func (controller *Controller) RestKVStoreList() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		controller.log.Info("RestKVStoreList()")
+
+		pw := pb.NewProxyWrapper(controller.instance, controller.GetSessionPtr())
+		traceId := uniqid.New(uniqid.Params{"traceid_", false})
+		value, err := pw.KVStoreList(traceId)
+		if err != nil {
+			controller.log.Errorf("cannot get value: %v", err)
+			http.Error(w, fmt.Sprintf("cannot get value: %v", err), http.StatusInternalServerError)
+		}
+
+		result := map[string]interface{}{}
+		for key, val := range (*value) {
+			var d interface{}
+			json.Unmarshal([]byte(val), &d)
+			result[key] = d
+		}
+
+
 		json, err := json.Marshal(controller.kvs)
 		if err != nil {
 			controller.log.Errorf("cannot marshal result: %v", err)
@@ -196,13 +212,21 @@ func (controller *Controller) RestKVStoreClientList() func(w http.ResponseWriter
 		client := vars["client"]
 		controller.log.Infof("RestKVStoreClientList(%v)", client)
 
-		prefix := client + "-"
-		result := make(map[string]interface{})
-		for name, val := range controller.kvs {
-			if strings.HasPrefix(name, prefix) {
-				result[strings.TrimPrefix(name, prefix)] = val
-			}
+		pw := pb.NewProxyWrapper(controller.instance, controller.GetSessionPtr())
+		traceId := uniqid.New(uniqid.Params{"traceid_", false})
+		value, err := pw.KVStoreClientList(client, traceId)
+		if err != nil {
+			controller.log.Errorf("cannot get value: %v", err)
+			http.Error(w, fmt.Sprintf("cannot get value: %v", err), http.StatusInternalServerError)
 		}
+
+		result := map[string]interface{}{}
+		for key, val := range (*value) {
+			var d interface{}
+			json.Unmarshal([]byte(val), &d)
+			result[key] = d
+		}
+
 		json, err := json.Marshal(result)
 		if err != nil {
 			controller.log.Errorf("cannot marshal result: %v", err)
@@ -220,15 +244,19 @@ func (controller *Controller) RestKVStoreClientValue() func(w http.ResponseWrite
 		client := vars["client"]
 		key := vars["key"]
 		controller.log.Infof("RestKVStoreClientValue(%v, %v)", client, key)
-		k := client + "-" + key
-		// ignore error. empty interface is ok
-		result, _ := controller.GetVar(k)
-		json, err := json.Marshal(result)
+
+		value, err := controller.GetVar(client, key)
 		if err != nil {
-			controller.log.Errorf("cannot marshal result: %v", err)
-			http.Error(w, fmt.Sprintf("cannot marshal result: %v", err), http.StatusInternalServerError)
-			return
+			controller.log.Errorf("cannot get value: %v", err)
+			http.Error(w, fmt.Sprintf("cannot get value: %v", err), http.StatusInternalServerError)
 		}
+
+		json, err := json.Marshal(value)
+		if err != nil {
+			controller.log.Errorf("cannot marshal value: %v", err)
+			http.Error(w, fmt.Sprintf("cannot marshal value: %v", err), http.StatusInternalServerError)
+		}
+
 		w.Header().Add("Content-Type", "application/json")
 		io.WriteString(w, string(json))
 	}
@@ -240,8 +268,8 @@ func (controller *Controller) RestKVStoreClientValuePut() func(w http.ResponseWr
 		client := vars["client"]
 		key := vars["key"]
 		controller.log.Debugf("RestKVStoreClientValuePost(%v, %v)", client, key)
-		k := client + "-" + key
 
+		// encode/decode to check for valid json
 		decoder := json.NewDecoder(r.Body)
 		var data interface{}
 		err := decoder.Decode(&data)
@@ -250,7 +278,12 @@ func (controller *Controller) RestKVStoreClientValuePut() func(w http.ResponseWr
 			http.Error(w, fmt.Sprintf("cannot decode data: %v", err), http.StatusInternalServerError)
 			return
 		}
-		controller.SetVar(k, data)
+
+		err = controller.SetVar(client, key, data )
+		if err != nil {
+			controller.log.Errorf("cannot set value: %v", err)
+			http.Error(w, fmt.Sprintf("cannot set value: %v", err), http.StatusInternalServerError)
+		}
 
 		w.Header().Add("Content-Type", "application/json")
 		io.WriteString(w, `{"status":"ok"}`)
@@ -263,9 +296,12 @@ func (controller *Controller) RestKVStoreClientValueDelete() func(w http.Respons
 		client := vars["client"]
 		key := vars["key"]
 		controller.log.Infof("RestKVStoreClientValueDelete(%v, %v)", client, key)
-		k := client + "-" + key
 
-		controller.DeleteVar(k)
+		err := controller.DeleteVar(client, key)
+		if err != nil {
+			controller.log.Errorf("cannot delete value: %v", err)
+			http.Error(w, fmt.Sprintf("cannot delete value: %v", err), http.StatusInternalServerError)
+		}
 
 		w.Header().Add("Content-Type", "application/json")
 		io.WriteString(w, `{"status":"ok"}`)

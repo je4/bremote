@@ -1,12 +1,16 @@
 package main
 
 import (
+	"crypto/dsa"
+	"crypto/ecdsa"
+	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
 	"github.com/goph/emperror"
 	"github.com/hashicorp/yamux"
 	"github.com/op/go-logging"
+	"github.com/prologic/bitcask"
 	"github.com/soheilhy/cmux"
 	"io/ioutil"
 	"net"
@@ -20,6 +24,7 @@ the proxy manages all client and controller sessions
 */
 type Proxy struct {
 	log      *logging.Logger
+	db       *bitcask.Bitcask
 	instance string
 	addr     string
 	caFile   string
@@ -36,9 +41,10 @@ type Proxy struct {
 /*
 create a new Proxy instance
 */
-func NewProxy(config Config, log *logging.Logger) (*Proxy, error) {
+func NewProxy(config Config, db *bitcask.Bitcask, log *logging.Logger) (*Proxy, error) {
 	proxy := &Proxy{log: log,
 		instance: config.InstanceName,
+		db:       db,
 		addr:     config.TLSAddr,
 		caFile:   config.CaPEM,
 		certFile: config.CertPEM,
@@ -223,7 +229,7 @@ func (proxy *Proxy) ListenServe() (err error) {
 	return
 }
 
-func( proxy *Proxy) Serve( listener net.Listener) error {
+func (proxy *Proxy) Serve(listener net.Listener) error {
 	tlsListener := tls.NewListener(listener, proxy.tlsCfg)
 	defer tlsListener.Close()
 
@@ -247,9 +253,26 @@ func( proxy *Proxy) Serve( listener net.Listener) error {
 			for _, v := range state.PeerCertificates {
 				publicKey, err := x509.MarshalPKIXPublicKey(v.PublicKey)
 				if err != nil {
-					proxy.log.Errorf("invalid public key %v: %v", reflect.TypeOf(v.PublicKey), v.PublicKey)
+					proxy.log.Errorf("cannot marshal public key %v: %v", reflect.TypeOf(v.PublicKey), v.PublicKey)
+					continue
 				}
-				proxy.log.Debugf("client public key %v: %v", reflect.TypeOf(v.PublicKey), publicKey)
+				keyval, err := x509.ParsePKIXPublicKey(publicKey)
+				if err != nil {
+					proxy.log.Errorf("cannot parse public key %v: %v", reflect.TypeOf(v.PublicKey), v.PublicKey)
+					continue
+				}
+				switch keyval.(type) {
+				case *rsa.PublicKey:
+					rsa := keyval.(*rsa.PublicKey)
+					proxy.log.Debugf("rsa: %v", rsa)
+				case *dsa.PublicKey:
+					dsa := keyval.(*dsa.PublicKey)
+					proxy.log.Debugf("rsa: %v", dsa)
+				case *ecdsa.PublicKey:
+					ecdsa := keyval.(*ecdsa.PublicKey)
+					proxy.log.Debugf("rsa: %v", ecdsa)
+				}
+				proxy.log.Debugf("client public key %v: %v", reflect.TypeOf(keyval), string(publicKey))
 			}
 		}
 		session, err := yamux.Client(incoming, nil)
@@ -275,6 +298,52 @@ func (proxy *Proxy) ServeSession(session *yamux.Session) error {
 	}()
 
 	return ps.Serve()
+}
+
+func (proxy *Proxy) setVar(key string, value string) error {
+	proxy.db.Lock()
+	defer proxy.db.Unlock()
+
+	if err := proxy.db.Put(key, []byte(value)); err != nil {
+		return emperror.Wrapf(err, "cannot write key %s", key)
+	}
+	proxy.db.Sync()
+	return nil
+}
+
+func (proxy *Proxy) deleteVar(key string) error {
+	proxy.db.Lock()
+	defer proxy.db.Unlock()
+
+	if err := proxy.db.Delete(key); err != nil {
+		return emperror.Wrapf(err, "cannot delete key %s", key)
+	}
+	proxy.db.Sync()
+	return nil
+}
+
+func (proxy *Proxy) getVar(key string) (string, error) {
+	proxy.db.RLock()
+	defer proxy.db.Unlock()
+	val, err := proxy.db.Get(key)
+	if err != nil {
+		return "", emperror.Wrapf(err, "no value found for key %v", key)
+	}
+	return string(val), nil
+}
+
+func (proxy *Proxy) getKeys(prefix string) ([]string, error) {
+	proxy.db.RLock()
+	defer proxy.db.Unlock()
+	keys := []string{}
+	err := proxy.db.Scan(prefix , func(key string) error {
+		keys = append(keys, key)
+		return nil
+	})
+	if err != nil {
+		return []string{}, emperror.Wrapf(err, "error getting keys for prefix %v", prefix)
+	}
+	return keys, nil
 }
 
 func (proxy *Proxy) Close() error {

@@ -33,7 +33,7 @@ echo "make client cert"
 
 openssl genrsa -out ${PREFIX}client.key 2048
 echo "00" > ${PREFIX}ca.srl
-openssl req -sha1 -key ${PREFIX}client.key -new -out ${PREFIX}client.req -subj "/C=CH/ST=Basel/L=Earth/O=FHNW/OU=HGK/OU=DIGMA/CN=fhnw.ch/emailAddress=${EMAIL}"
+openssl req -sha1 -key ${PREFIX}client.key -new -out ${PREFIX}client.req -subj "/C=CH/ST=Basel/L=Earth/O=FHNW/OU=HGK/OU=DIGMA/OU=fhnw.ch/CN=bremote/emailAddress=${EMAIL}"
 # Adding -addtrust clientAuth makes certificates Go can't read
 openssl x509 -req -days 365 -in ${PREFIX}client.req -CA ${PREFIX}ca.pem -CAkey ${PREFIX}ca.key -passin pass:$PRIVKEY -out ${PREFIX}client.pem # -addtrust clientAuth
 

@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"github.com/je4/bremote/common"
+	"github.com/prologic/bitcask"
 	"log"
 	"os"
 )
@@ -46,7 +47,14 @@ func main() {
 	log, lf := common.CreateLogger(config.InstanceName, config.Logfile, config.Loglevel)
 	defer lf.Close()
 
-	proxy, err := NewProxy(config, log)
+
+	db, err := bitcask.Open(config.KVDBFile)
+	if err != nil {
+		log.Panicf("Error opening key value store \"%s\": %v", config.KVDBFile, err)
+	}
+	defer db.Close()
+
+	proxy, err := NewProxy(config, db, log)
 	if err != nil {
 		log.Fatalf("error creating proxy instance: %+v", err)
 	}

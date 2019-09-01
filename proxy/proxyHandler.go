@@ -10,6 +10,7 @@ import (
 	"github.com/op/go-logging"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"strings"
 	"time"
 )
 
@@ -24,13 +25,13 @@ func NewProxyServiceServer(proxySession *ProxySession, log *logging.Logger) *Pro
 }
 
 func (pss ProxyServiceServer) Ping(ctx context.Context, param *pb.String) (*pb.String, error) {
-	traceId, sourceInstance,  err := common.RpcContextMetadata2(ctx)
+	traceId, sourceInstance, err := common.RpcContextMetadata2(ctx)
 	if err != nil {
 		pss.log.Errorf("invalid metadata in call to %v: %v", "StartBrowser()", err)
 		return nil, status.Errorf(codes.Unavailable, fmt.Sprintf("invalid metadata: %v", err))
 	}
 
-	pss.log.Infof("[%v] %v -> /Ping( %v )", traceId, sourceInstance,  param.GetValue())
+	pss.log.Infof("[%v] %v -> /Ping( %v )", traceId, sourceInstance, param.GetValue())
 
 	ret := new(pb.String)
 	ret.Value = "pong: " + param.GetValue()
@@ -39,7 +40,7 @@ func (pss ProxyServiceServer) Ping(ctx context.Context, param *pb.String) (*pb.S
 }
 
 func (pss ProxyServiceServer) Init(ctx context.Context, param *pb.InitParam) (*empty.Empty, error) {
-	traceId, sourceInstance,  err := common.RpcContextMetadata2(ctx)
+	traceId, sourceInstance, err := common.RpcContextMetadata2(ctx)
 	if err != nil {
 		pss.log.Errorf("invalid metadata in call to %v: %v", "StartBrowser()", err)
 		return nil, status.Errorf(codes.Unavailable, fmt.Sprintf("invalid metadata: %v", err))
@@ -48,7 +49,7 @@ func (pss ProxyServiceServer) Init(ctx context.Context, param *pb.InitParam) (*e
 	stat := param.GetStatus()
 	httpAddr := param.GetHttpAddr()
 
-	pss.log.Infof("[%v] %v -> /Init( %v, %v, %v )", traceId, sourceInstance,  client, pb.ProxySessionType_name[int32(param.GetSessionType())], stat)
+	pss.log.Infof("[%v] %v -> /Init( %v, %v, %v )", traceId, sourceInstance, client, pb.ProxySessionType_name[int32(param.GetSessionType())], stat)
 
 	instance := pss.proxySession.GetInstance()
 	if _, err := pss.proxySession.GetProxy().GetSession(client); err == nil {
@@ -107,8 +108,8 @@ func (pss ProxyServiceServer) GetClients(ctx context.Context, req *pb.GetClients
 		}
 		clients.Clients = append(clients.Clients, &pb.ProxyClient{
 			Instance: session.GetInstance(),
-			Type: pb.ProxySessionType(session.GetSessionType()),
-			Status:status,
+			Type:     pb.ProxySessionType(session.GetSessionType()),
+			Status:   status,
 		})
 	}
 	return clients, nil
@@ -151,7 +152,7 @@ func (pss ProxyServiceServer) WebsocketMessage(ctx context.Context, req *pb.Byte
 		return nil, status.Errorf(codes.Unavailable, fmt.Sprintf("invalid metadata in call to %v: %v", "WebSocketMessage()", err))
 	}
 
-	pss.log.Infof("[%v] %v -> /ws() -> %v", traceId, sourceInstance,  targetGroup)
+	pss.log.Infof("[%v] %v -> /ws() -> %v", traceId, sourceInstance, targetGroup)
 
 	instances := pss.proxySession.proxy.groups.GetMembers(targetGroup)
 	for _, instanceName := range instances {
@@ -161,7 +162,7 @@ func (pss ProxyServiceServer) WebsocketMessage(ctx context.Context, req *pb.Byte
 		}
 		session, err := pss.proxySession.proxy.GetSession(instanceName)
 		if err != nil {
-			pss.log.Errorf("client %v not active - cannot send websocket message: %v", instanceName, err )
+			pss.log.Errorf("client %v not active - cannot send websocket message: %v", instanceName, err)
 			continue
 		}
 		// every session has it's own grpc service
@@ -176,4 +177,138 @@ func (pss ProxyServiceServer) WebsocketMessage(ctx context.Context, req *pb.Byte
 	}
 
 	return &empty.Empty{}, nil
+}
+
+func (pss ProxyServiceServer) KVStoreSetValue(ctx context.Context, req *pb.KVSetValueMessage) (*empty.Empty, error) {
+	traceId, sourceInstance, err := common.RpcContextMetadata2(ctx)
+	if err != nil {
+		pss.log.Errorf("invalid metadata in call to %v: %v", "KVStoreSetValue()", err)
+		return nil, status.Errorf(codes.Unavailable, fmt.Sprintf("invalid metadata in call to %v: %v", "KVStoreSetValue()", err))
+	}
+
+	k := req.GetKey()
+	key := fmt.Sprintf("%s-%s", k.GetClient(), k.GetKey())
+
+	pss.log.Infof("[%v] %v -> /KVStoreSetValue(%s) -> %v", traceId, sourceInstance, key)
+
+	if err := pss.proxySession.proxy.setVar(key, req.GetValue()); err != nil {
+		pss.log.Errorf("cannot set data for %v from key value store: %v", key, err)
+		return nil, status.Errorf(codes.NotFound, fmt.Sprintf("cannot set data for %v from key value store: %v", key, err))
+	}
+	return &empty.Empty{}, nil
+}
+
+func (pss ProxyServiceServer) KVStoreGetValue(ctx context.Context, req *pb.KVKeyMessage) (*pb.String, error) {
+	traceId, sourceInstance, err := common.RpcContextMetadata2(ctx)
+	if err != nil {
+		pss.log.Errorf("invalid metadata in call to %v: %v", "KVStoreGetValue()", err)
+		return nil, status.Errorf(codes.Unavailable, fmt.Sprintf("invalid metadata in call to %v: %v", "KVStoreGetValue()", err))
+	}
+
+	key := fmt.Sprintf("%s-%s", req.GetClient(), req.GetKey())
+
+	pss.log.Infof("[%v] %v -> /KVStoreGetValue(%s) -> %v", traceId, sourceInstance, key)
+
+	ret, err := pss.proxySession.proxy.getVar(key)
+	if err != nil {
+		pss.log.Errorf("cannot get data for %v from key value store: %v", key, err)
+		return nil, status.Errorf(codes.NotFound, fmt.Sprintf("cannot get data for %v from key value store: %v", key, err))
+	}
+	return &pb.String{Value: ret}, nil
+}
+func (pss ProxyServiceServer) KVStoreDeleteValue(ctx context.Context, req *pb.KVKeyMessage) (*empty.Empty, error) {
+	traceId, sourceInstance, err := common.RpcContextMetadata2(ctx)
+	if err != nil {
+		pss.log.Errorf("invalid metadata in call to %v: %v", "KVStoreDeleteValue()", err)
+		return nil, status.Errorf(codes.Unavailable, fmt.Sprintf("invalid metadata in call to %v: %v", "KVStoreDeleteValue()", err))
+	}
+
+	key := fmt.Sprintf("%s-%s", req.GetClient(), req.GetKey())
+
+	pss.log.Infof("[%v] %v -> /KVStoreDeleteValue(%s) -> %v", traceId, sourceInstance, key)
+
+	if err := pss.proxySession.proxy.deleteVar(key); err != nil {
+		pss.log.Errorf("cannot delete data for %v from key value store: %v", key, err)
+		return nil, status.Errorf(codes.NotFound, fmt.Sprintf("cannot delete data for %v from key value store: %v", key, err))
+	}
+
+	return &empty.Empty{}, nil
+}
+
+func (pss ProxyServiceServer) KVStoreList(ctx context.Context, req *empty.Empty) (*pb.KVSetValueListMessage, error) {
+	traceId, sourceInstance, err := common.RpcContextMetadata2(ctx)
+	if err != nil {
+		pss.log.Errorf("invalid metadata in call to %v: %v", "KVStoreList()", err)
+		return nil, status.Errorf(codes.Unavailable, fmt.Sprintf("invalid metadata in call to %v: %v", "KVStoreList()", err))
+	}
+
+	pss.log.Infof("[%v] %v -> /KVStoreList() -> %v", traceId, sourceInstance)
+
+	keys, err := pss.proxySession.proxy.getKeys("")
+	if err != nil {
+		pss.log.Errorf("cannot get keys from key value store: %v", err)
+		return nil, status.Errorf(codes.NotFound, fmt.Sprintf("cannot get keys from key value store: %v", err))
+	}
+	result := &pb.KVSetValueListMessage{}
+	for _, key := range keys {
+		value, err := pss.proxySession.proxy.getVar(key)
+		if err != nil {
+			pss.log.Errorf("cannot get data for %v from key value store: %v", key, err)
+			return nil, status.Errorf(codes.NotFound, fmt.Sprintf("cannot get data for %v from key value store: %v", key, err))
+		}
+		kparts := strings.Split(key, "-")
+		if len(kparts) < 2 {
+			pss.log.Errorf("invalid key %v", key)
+			continue
+		}
+		client, key := kparts[0], kparts[1:]
+		result.Data = append(result.Data, &pb.KVSetValueMessage{
+			Key: &pb.KVKeyMessage{
+				Client: client,
+				Key:    strings.Join(key, "-"),
+			},
+			Value: value,
+		})
+	}
+
+	return result, nil
+}
+func (pss ProxyServiceServer) KVStoreClientList(ctx context.Context, req *pb.String) (*pb.KVSetValueListMessage, error) {
+	traceId, sourceInstance, err := common.RpcContextMetadata2(ctx)
+	if err != nil {
+		pss.log.Errorf("invalid metadata in call to %v: %v", "KVStoreClientList()", err)
+		return nil, status.Errorf(codes.Unavailable, fmt.Sprintf("invalid metadata in call to %v: %v", "KVStoreClientList()", err))
+	}
+
+	pss.log.Infof("[%v] %v -> /KVStoreClientList() -> %v", traceId, sourceInstance)
+
+	keys, err := pss.proxySession.proxy.getKeys(req.GetValue() + "-")
+	if err != nil {
+		pss.log.Errorf("cannot get keys from key value store: %v", err)
+		return nil, status.Errorf(codes.NotFound, fmt.Sprintf("cannot get keys from key value store: %v", err))
+	}
+	result := &pb.KVSetValueListMessage{}
+	if len(keys) > 0 {
+		for _, key := range keys {
+			value, err := pss.proxySession.proxy.getVar(key)
+			if err != nil {
+				pss.log.Errorf("cannot get data for %v from key value store: %v", key, err)
+				return nil, status.Errorf(codes.NotFound, fmt.Sprintf("cannot get data for %v from key value store: %v", key, err))
+			}
+			kparts := strings.Split(key, "-")
+			if len(kparts) < 2 {
+				pss.log.Errorf("invalid key %v", key)
+				continue
+			}
+			client, key := kparts[0], kparts[1:]
+			result.Data = append(result.Data, &pb.KVSetValueMessage{
+				Key: &pb.KVKeyMessage{
+					Client: client,
+					Key:    strings.Join(key, "-"),
+				},
+				Value: value,
+			})
+		}
+	}
+	return result, nil
 }

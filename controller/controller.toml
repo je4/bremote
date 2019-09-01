@@ -1,8 +1,8 @@
 logfile = "" # log file location
 loglevel = "DEBUG" # CRITICAL|ERROR|WARNING|NOTICE|INFO|DEBUG
-instancename = "controller01" # instance name
-#proxy = "localhost:7777" # proxy addr:port
-proxy = "vpn-de2.info-age.net:80" # proxy addr:port
+instancename = "controller02" # instance name
+proxy = "localhost:7777" # proxy addr:port
+#proxy = "vpn-de2.info-age.net:80" # proxy addr:port
 
 certpem = "C:/daten/go/certs/mediathek_client.pem" # tls client certificate file in PEM format
 keypem = "C:/daten/go/certs/mediathek_client.key" # tls client key file in PEM format
@@ -15,7 +15,7 @@ httpskeypem = "C:/daten/go/certs/mediathek_server.key" # tls client key file in 
 #capem = "C:/daten/go/certs/bremote_ca.pem" # tls root certificate file in PEM format
 #httpscertpem = "C:/daten/go/certs/bremote_server.pem" # tls client certificate file in PEM format
 #httpskeypem = "C:/daten/go/certs/bremote_server.key" # tls client key file in PEM format
-httpsaddr = "localhost:8444"
+httpsaddr = "localhost:8445"
 httpstatic = "C:/daten/go/src/github.com/je4/bremote/controller/data/static" # folder for static html files
 
 [templates]

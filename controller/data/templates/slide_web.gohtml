@@ -1,0 +1,110 @@
+<html>
+<head>
+    <title>
+        Impressions from HGK Archive
+    </title>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            background-color: black;
+            overflow: hidden;
+            cursor: none;
+        }
+        #heading_w {
+            position: fixed;
+            bottom: 5px;
+            right: 5px;
+            color: white;
+            font-size: 36px;
+            font-family: "arial";
+        }
+        #qrcode {
+            position: fixed;
+            bottom: 50px;
+            right: 2px;
+            padding:25px;
+            background-color: white;
+        }
+        #heading_b {
+            position: fixed;
+            bottom: 2px;
+            right: 2px;
+            color: black;
+            font-size: 36px;
+            font-family: "arial";
+        }
+        .slides {
+            display: none;
+            width: 100%;
+        }
+
+        .animate-left {
+            position: relative;
+            animation: animateleft 1.2s
+        }
+
+        @keyframes animateleft {
+            from { left :-500px; opacity:0 } to { left:0; opacity:1 }
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+    <script src="https://cdn.rawgit.com/davidshimjs/qrcodejs/gh-pages/qrcode.js"></script>
+    <script>
+        var qrcode;
+        var pages = [
+            [[range $val := .pages]]"[[$val.masterurl]]",
+            [[end]]
+        ]
+        var codes = [
+            [[range $val := .pages]]"[[$val.qrcode]]",
+            [[end]]
+        ]
+        var delays = [
+            [[range $val := .pages]]"[[$val.delay]]000",
+            [[end]]
+        ]
+        var simplePages = function () {
+            count++;
+            if (count > pages.length) { count = 1; }
+
+            var code = codes[count-1];
+            if( code == "<no value>" ) {
+                code = pages[count-1];
+            }
+            document.getElementById('daPage').src = pages[count-1];
+            document.getElementById('heading_b').innerText = code;
+            document.getElementById('heading_w').innerText = code;
+            qrcode.clear();
+            qrcode.makeCode(code);
+            setTimeout(simplePages, [[.delay]]000);
+        };
+
+        document.addEventListener("DOMContentLoaded", function(){
+            qrcode = new QRCode("qrcode", {
+                text: "http://jindo.dev.naver.com/collie",
+                width: 200,
+                height: 200,
+                colorDark : "#000000",
+                colorLight : "#ffffff",
+                correctLevel : QRCode.CorrectLevel.H
+            });
+            simplePages();
+        });
+
+        var count = 0;
+
+    </script>
+</head>
+<body>
+
+<iframe id="daPage" src="about:blank" width="100%" height="100%" frameborder="0"></iframe>
+<div id="qrcode"></div>
+<div id="heading_b">
+    [[.title]]
+</div>
+<div id="heading_w">
+    [[.title]]
+</div>
+</body>
+</html>

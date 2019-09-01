@@ -14,6 +14,7 @@ type Config struct {
 	CaPEM        string
 	TLSAddr      string
 	WebRoot      string
+	KVDBFile     string
 }
 
 func LoadConfig(filepath string) Config {

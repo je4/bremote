@@ -13,7 +13,9 @@ require (
 	github.com/hashicorp/yamux v0.0.0-20181012175058-2f1d1f20f75d
 	github.com/je4/grpc-proxy v0.0.0-20190725095843-862068e643c2
 	github.com/mintance/go-uniqid v0.0.0-20180517195806-49cb885aad99
+	github.com/mwitkow/grpc-proxy v0.0.0-20181017164139-0f1106ef9c76 // indirect
 	github.com/op/go-logging v0.0.0-20160315200505-970db520ece7
+	github.com/prologic/bitcask v0.3.2
 	github.com/soheilhy/cmux v0.1.4
 	google.golang.org/grpc v1.22.1
 )
