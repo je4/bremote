@@ -7,6 +7,7 @@ const (
 	SessionType_Undefined  SessionType = 0
 	SessionType_Client     SessionType = 1
 	SessionType_Controller SessionType = 2
+	SessionType_Proxy      SessionType = 3
 )
 
 const (

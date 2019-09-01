@@ -39,8 +39,14 @@ type ProxySession struct {
 	session       *yamux.Session
 }
 
-func NewProxySession(instance string, session *yamux.Session, groups []string, proxy *Proxy, log *logging.Logger) *ProxySession {
-	ps := &ProxySession{instance: instance, session: session, proxy: proxy, groups: groups, log: log, sessionType: common.SessionType_Undefined}
+func NewProxySession(instance string, session *yamux.Session, groups []string, sessionType common.SessionType, proxy *Proxy, log *logging.Logger) *ProxySession {
+	ps := &ProxySession{instance: instance,
+		session: session,
+		proxy: proxy,
+		groups: groups,
+		log: log,
+		sessionType: sessionType,
+	}
 	return ps
 }
 

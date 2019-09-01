@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/goph/emperror"
 	"github.com/hashicorp/yamux"
+	"github.com/je4/bremote/common"
 	"github.com/op/go-logging"
 	"github.com/prologic/bitcask"
 	"github.com/soheilhy/cmux"
@@ -32,6 +33,7 @@ type Proxy struct {
 	sessions map[string]*ProxySession
 	groups   *InstanceGroups
 	webRoot  string
+	typeMap  map[string]common.SessionType
 
 	sync.RWMutex
 }
@@ -50,6 +52,11 @@ func NewProxy(config Config, db *bitcask.Bitcask, log *logging.Logger) (*Proxy, 
 		sessions: make(map[string]*ProxySession),
 		groups:   NewInstanceGroups(),
 		webRoot:  config.WebRoot,
+		typeMap: map[string]common.SessionType{
+			"client":     common.SessionType_Client,
+			"proxy":      common.SessionType_Proxy,
+			"controller": common.SessionType_Controller,
+		},
 	}
 	if err := proxy.Init(); err != nil {
 		return nil, emperror.Wrap(err, "cannot connect")
@@ -252,6 +259,7 @@ func (proxy *Proxy) Serve(listener net.Listener) error {
 
 		groups := []string{}
 		names := []string{}
+		types := []common.SessionType{}
 		state := tlscon.ConnectionState()
 		for _, v := range state.PeerCertificates {
 			group := fmt.Sprintf("%s/%s",
@@ -262,8 +270,12 @@ func (proxy *Proxy) Serve(listener net.Listener) error {
 				proxy.log.Errorf("no commonName in certificate: %v", v.Subject.String())
 				continue
 			}
-
-			v.Subject.
+			for _, loc := range v.Subject.Locality {
+				t, ok := proxy.typeMap[loc]
+				if ok {
+					types = append(types, t)
+				}
+			}
 
 			groups = append(groups, group)
 			names = append(names, v.Subject.CommonName)
@@ -271,6 +283,10 @@ func (proxy *Proxy) Serve(listener net.Listener) error {
 		if len(names) == 0 {
 			proxy.log.Error("no commonNames certificates")
 			continue
+		}
+		sessionType := common.SessionType_Undefined
+		if len(types) > 0 {
+			sessionType = types[0]
 		}
 
 		session, err := yamux.Client(incoming, nil)
@@ -280,18 +296,18 @@ func (proxy *Proxy) Serve(listener net.Listener) error {
 		}
 
 		proxy.log.Info("launching a gRPC server over incoming TCP connection")
-		go proxy.ServeSession(session, groups, names[0])
+		go proxy.ServeSession(session, groups, names[0], sessionType)
 	}
 	return nil
 }
 
-func (proxy *Proxy) ServeSession(session *yamux.Session, groups []string, instancename string) error {
+func (proxy *Proxy) ServeSession(session *yamux.Session, groups []string, instancename string, sessionType common.SessionType) error {
 	// using master key means, that name has to be unique
 	if instancename == "master" {
 		instancename = session.RemoteAddr().String()
 	}
 
-	ps := NewProxySession(instancename, session, groups, proxy, proxy.log)
+	ps := NewProxySession(instancename, session, groups, sessionType, proxy, proxy.log)
 	defer func() {
 		if err := ps.Close(); err != nil {
 			proxy.log.Errorf("error closing proxy session %v: %v", ps.GetInstance(), err)

@@ -61,13 +61,21 @@ func (pss ProxyServiceServer) Init(ctx context.Context, param *pb.InitParam) (*e
 				return nil, status.Errorf(codes.OutOfRange, fmt.Sprintf("cannot rename %v to %v: %v", instance, client, err))
 			}
 		} else {
-			client = instance
 			pss.log.Errorf("forbidden to rename %v to %v", instance, client)
+			client = instance
 			//return nil, status.Errorf(codes.InvalidArgument, fmt.Sprintf("forbidden to rename %v to %v", instance, client))
 		}
 	}
-	pss.proxySession.SetSessionType(common.SessionType(param.SessionType))
-
+	// set session typ only, if master key or undefined
+	currentType := pss.proxySession.GetSessionType()
+	newType := common.SessionType(param.SessionType)
+	if currentType != newType {
+		if currentType == common.SessionType_Undefined || instance == "master" {
+			pss.proxySession.SetSessionType(newType)
+		} else {
+			pss.log.Errorf("forbidden to change sessionType from %v to %v", currentType, newType)
+		}
+	}
 	go func() {
 		time.Sleep(time.Millisecond * 300)
 

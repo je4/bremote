@@ -18,15 +18,18 @@ EMAIL=$1
 PREFIX=$2
 
 mkcert() {
-  machine = $1
-  type = $2
+  machine=$1
+  type=$2
 
   certfile="${PREFIX}${machine}"
-  echo ${certfile}
+  echo ${certfile} ++++
   openssl genrsa -out ${certfile}.key 2048
-  openssl req -sha1 -key ${certfile}.key -new -out ${certfile}.req -subj "/C=CH/ST=Basel/O=info-age/OU=display01/CN=${machine}/emailAddress=${EMAIL}" -addext "type = ${2}"
+  openssl req -sha1 -key ${certfile}.key -new -out ${certfile}.req -subj "/L=${type}/C=CH/ST=Basel/O=info-age/OU=display01/CN=${machine}/emailAddress=${EMAIL}"
   # Adding -addtrust clientAuth makes certificates Go can't read
-  openssl x509 -req -days 365 -in ${certfile}.req -CA ${PREFIX}ca.pem -CAkey ${PREFIX}ca.key -passin pass:$PRIVKEY -out ${certfile}.pem # -addtrust clientAuth
+  #openssl x509 -req -extfile <(printf "subjectAltName=DNS:${type}") -days 365 -in ${certfile}.req -CA ${PREFIX}ca.pem -CAkey ${PREFIX}ca.key -passin pass:$PRIVKEY -out ${certfile}.pem # -addtrust clientAuth
+  # uuid: 7b721292-cc3d-4855-99e1-262444bce988 == type
+  openssl x509 -req -days 365 -in ${certfile}.req -CA ${PREFIX}ca.pem -CAkey ${PREFIX}ca.key -passin pass:$PRIVKEY -out ${certfile}.pem
+
 
   openssl x509 -extfile ../openssl.conf -extensions ssl_client -req -days 365 -in ${certfile}.req -CA ${PREFIX}ca.pem -CAkey ${PREFIX}ca.key -passin pass:$PRIVKEY -out ${certfile}.pem
 }
@@ -34,6 +37,8 @@ mkcert() {
 rm -f certs/${PREFIX}*
 #mkdir certs
 cd certs
+
+echo "00" > ${PREFIX}ca.srl
 
 echo "make CA"
 PRIVKEY="info-age21654968473214dsD"
@@ -45,13 +50,14 @@ openssl req -new -x509 -days 365 -keyout ${PREFIX}ca.key -out ${PREFIX}ca.pem -s
 #echo "make client cert"
 #openssl req -new -nodes -x509 -out ${PREFIX}client.pem -keyout ${PREFIX}client.key -days 3650 -subj "/C=CH/ST=Basel/L=Earth/O=FHNW/OU=HGK/OU=DIGMA/CN=www.fhnw.ch/emailAddress=${EMAIL}"
 
-declare -a machines=()
 
-machines+=("master")
-machines+=("proxy")
-#machines+=("proxy02")
-machines+=("controller01")
-machines+=("controller02")
+
+mkcert "master" "any"
+mkcert "proxy" "proxy"
+mkcert "controller01" "controller"
+mkcert "controller02" "controller"
+
+declare -a machines=()
 
 for i in {1..99}
 do
@@ -60,17 +66,7 @@ do
   machines+=($machine)
 done
 
-echo "00" > ${PREFIX}ca.srl
-
 for machine in "${machines[@]}"
 do
-  certfile="${PREFIX}${machine}"
-  echo ${certfile}
-  openssl genrsa -out ${certfile}.key 2048
-  openssl req -sha1 -key ${certfile}.key -new -out ${certfile}.req -subj "/C=CH/ST=Basel/O=info-age/OU=display01/CN=${machine}/emailAddress=${EMAIL}"
-  # Adding -addtrust clientAuth makes certificates Go can't read
-  openssl x509 -req -days 365 -in ${certfile}.req -CA ${PREFIX}ca.pem -CAkey ${PREFIX}ca.key -passin pass:$PRIVKEY -out ${certfile}.pem # -addtrust clientAuth
-
-  openssl x509 -extfile ../openssl.conf -extensions ssl_client -req -days 365 -in ${certfile}.req -CA ${PREFIX}ca.pem -CAkey ${PREFIX}ca.key -passin pass:$PRIVKEY -out ${certfile}.pem
-
+  mkcert $machine "client"
 done
