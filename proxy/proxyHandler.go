@@ -52,13 +52,20 @@ func (pss ProxyServiceServer) Init(ctx context.Context, param *pb.InitParam) (*e
 	pss.log.Infof("[%v] %v -> /Init( %v, %v, %v )", traceId, sourceInstance, client, pb.ProxySessionType_name[int32(param.GetSessionType())], stat)
 
 	instance := pss.proxySession.GetInstance()
-	if _, err := pss.proxySession.GetProxy().GetSession(client); err == nil {
-		return nil, status.Errorf(codes.AlreadyExists, fmt.Sprintf("cannot rename %v to %v: instance already exists", instance, client, err))
+	if client != instance {
+		if instance == "master" {
+			if _, err := pss.proxySession.GetProxy().GetSession(client); err == nil {
+				return nil, status.Errorf(codes.AlreadyExists, fmt.Sprintf("cannot rename %v to %v: instance already exists", instance, client, err))
+			}
+			if err := pss.proxySession.SetInstance(client); err != nil {
+				return nil, status.Errorf(codes.OutOfRange, fmt.Sprintf("cannot rename %v to %v: %v", instance, client, err))
+			}
+		} else {
+			client = instance
+			pss.log.Errorf("forbidden to rename %v to %v", instance, client)
+			//return nil, status.Errorf(codes.InvalidArgument, fmt.Sprintf("forbidden to rename %v to %v", instance, client))
+		}
 	}
-	if err := pss.proxySession.SetInstance(client); err != nil {
-		return nil, status.Errorf(codes.OutOfRange, fmt.Sprintf("cannot rename %v to %v: %v", instance, client, err))
-	}
-
 	pss.proxySession.SetSessionType(common.SessionType(param.SessionType))
 
 	go func() {

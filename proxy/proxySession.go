@@ -30,6 +30,7 @@ type ProxySession struct {
 	log           *logging.Logger
 	instance      string
 	proxy         *Proxy
+	groups        []string
 	sessionType   common.SessionType
 	service       *ProxyServiceServer
 	grpcServer    *grpc.Server
@@ -38,8 +39,8 @@ type ProxySession struct {
 	session       *yamux.Session
 }
 
-func NewProxySession(instance string, session *yamux.Session, proxy *Proxy, log *logging.Logger) *ProxySession {
-	ps := &ProxySession{instance: instance, session: session, proxy: proxy, log: log, sessionType: common.SessionType_Undefined}
+func NewProxySession(instance string, session *yamux.Session, groups []string, proxy *Proxy, log *logging.Logger) *ProxySession {
+	ps := &ProxySession{instance: instance, session: session, proxy: proxy, groups: groups, log: log, sessionType: common.SessionType_Undefined}
 	return ps
 }
 
@@ -110,7 +111,7 @@ func wsEcho(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (ps *ProxySession) ProxyDirector() (func(req *http.Request)){
+func (ps *ProxySession) ProxyDirector() func(req *http.Request) {
 	target, _ := url.Parse("http://localhost:80/")
 	targetQuery := target.RawQuery
 	r := regexp.MustCompile(`^/([^/]+)/`)

@@ -1,12 +1,10 @@
 package main
 
 import (
-	"crypto/dsa"
-	"crypto/ecdsa"
-	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
+	"fmt"
 	"github.com/goph/emperror"
 	"github.com/hashicorp/yamux"
 	"github.com/op/go-logging"
@@ -15,7 +13,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"reflect"
+	"strings"
 	"sync"
 )
 
@@ -238,59 +236,62 @@ func (proxy *Proxy) Serve(listener net.Listener) error {
 		// Accept blocks until there is an incoming TCP connection
 		incoming, err := tlsListener.Accept()
 		if err != nil {
-			return emperror.Wrap(err, "couldn't accept incoming connection")
+			proxy.log.Errorf("couldn't accept incoming connection: %v", err)
+			continue
 		}
 		tlscon, ok := incoming.(*tls.Conn)
-		if ok {
-			proxy.log.Debug("conn: type assert to TLS succeedded")
-			err := tlscon.Handshake()
-			if err != nil {
-				proxy.log.Errorf("handshake failed: %s", err)
-			} else {
-				proxy.log.Debug("conn: Handshake completed")
-			}
-			state := tlscon.ConnectionState()
-			for _, v := range state.PeerCertificates {
-				publicKey, err := x509.MarshalPKIXPublicKey(v.PublicKey)
-				if err != nil {
-					proxy.log.Errorf("cannot marshal public key %v: %v", reflect.TypeOf(v.PublicKey), v.PublicKey)
-					continue
-				}
-				keyval, err := x509.ParsePKIXPublicKey(publicKey)
-				if err != nil {
-					proxy.log.Errorf("cannot parse public key %v: %v", reflect.TypeOf(v.PublicKey), v.PublicKey)
-					continue
-				}
-				switch keyval.(type) {
-				case *rsa.PublicKey:
-					rsa := keyval.(*rsa.PublicKey)
-					proxy.log.Debugf("rsa: %v", rsa)
-				case *dsa.PublicKey:
-					dsa := keyval.(*dsa.PublicKey)
-					proxy.log.Debugf("rsa: %v", dsa)
-				case *ecdsa.PublicKey:
-					ecdsa := keyval.(*ecdsa.PublicKey)
-					proxy.log.Debugf("rsa: %v", ecdsa)
-				}
-				proxy.log.Debugf("client public key %v: %v", reflect.TypeOf(keyval), string(publicKey))
-			}
+		if !ok {
+			proxy.log.Errorf("no tls connection: %v", err)
+			continue
 		}
+		proxy.log.Debug("conn: type assert to TLS succeedded")
+		if err := tlscon.Handshake(); err != nil {
+			proxy.log.Errorf("handshake failed: %v", err)
+			continue
+		}
+
+		groups := []string{}
+		names := []string{}
+		state := tlscon.ConnectionState()
+		for _, v := range state.PeerCertificates {
+			group := fmt.Sprintf("%s/%s",
+				strings.Join(v.Subject.Organization, "/"),
+				strings.Join(v.Subject.OrganizationalUnit, "/"),
+			)
+			if len(v.Subject.CommonName) == 0 {
+				proxy.log.Errorf("no commonName in certificate: %v", v.Subject.String())
+				continue
+			}
+
+			v.Subject.
+
+			groups = append(groups, group)
+			names = append(names, v.Subject.CommonName)
+		}
+		if len(names) == 0 {
+			proxy.log.Error("no commonNames certificates")
+			continue
+		}
+
 		session, err := yamux.Client(incoming, nil)
 		if err != nil {
-			return emperror.Wrap(err, "couldn't create yamux")
+			proxy.log.Errorf("couldn't create yamux: %v", err)
+			continue
 		}
 
 		proxy.log.Info("launching a gRPC server over incoming TCP connection")
-		go proxy.ServeSession(session)
+		go proxy.ServeSession(session, groups, names[0])
 	}
 	return nil
 }
 
-func (proxy *Proxy) ServeSession(session *yamux.Session) error {
-	// create a server instance
-	instancename := session.RemoteAddr().String()
+func (proxy *Proxy) ServeSession(session *yamux.Session, groups []string, instancename string) error {
+	// using master key means, that name has to be unique
+	if instancename == "master" {
+		instancename = session.RemoteAddr().String()
+	}
 
-	ps := NewProxySession(instancename, session, proxy, proxy.log)
+	ps := NewProxySession(instancename, session, groups, proxy, proxy.log)
 	defer func() {
 		if err := ps.Close(); err != nil {
 			proxy.log.Errorf("error closing proxy session %v: %v", ps.GetInstance(), err)
@@ -336,7 +337,7 @@ func (proxy *Proxy) getKeys(prefix string) ([]string, error) {
 	proxy.db.RLock()
 	defer proxy.db.Unlock()
 	keys := []string{}
-	err := proxy.db.Scan(prefix , func(key string) error {
+	err := proxy.db.Scan(prefix, func(key string) error {
 		keys = append(keys, key)
 		return nil
 	})

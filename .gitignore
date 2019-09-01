@@ -4,3 +4,4 @@ client/.idea
 controller/.idea
 controller/init
 kv.bitcask
+certs
