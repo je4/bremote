@@ -52,8 +52,20 @@ func (pss ProxyServiceServer) Init(ctx context.Context, param *pb.InitParam) (*e
 	pss.log.Infof("[%v] %v -> /Init( %v, %v, %v )", traceId, sourceInstance, client, pb.ProxySessionType_name[int32(param.GetSessionType())], stat)
 
 	instance := pss.proxySession.GetInstance()
+	// set session typ only, if master key or undefined
+	currentType := pss.proxySession.GetSessionType()
+	newType := common.SessionType(param.SessionType)
+	if currentType != newType {
+		if currentType == common.SessionType_Undefined || pss.proxySession.IsGeneric() {
+			pss.proxySession.SetSessionType(newType)
+		} else {
+			pss.log.Errorf("forbidden to change sessionType from %v to %v", currentType, newType)
+			return nil, status.Errorf(codes.InvalidArgument, fmt.Sprintf("forbidden to change sessionType from %v to %v", currentType, newType))
+		}
+	}
+
 	if client != instance {
-		if instance == "master" {
+		if pss.proxySession.IsGeneric() {
 			if _, err := pss.proxySession.GetProxy().GetSession(client); err == nil {
 				return nil, status.Errorf(codes.AlreadyExists, fmt.Sprintf("cannot rename %v to %v: instance already exists", instance, client, err))
 			}
@@ -62,18 +74,7 @@ func (pss ProxyServiceServer) Init(ctx context.Context, param *pb.InitParam) (*e
 			}
 		} else {
 			pss.log.Errorf("forbidden to rename %v to %v", instance, client)
-			client = instance
-			//return nil, status.Errorf(codes.InvalidArgument, fmt.Sprintf("forbidden to rename %v to %v", instance, client))
-		}
-	}
-	// set session typ only, if master key or undefined
-	currentType := pss.proxySession.GetSessionType()
-	newType := common.SessionType(param.SessionType)
-	if currentType != newType {
-		if currentType == common.SessionType_Undefined || instance == "master" {
-			pss.proxySession.SetSessionType(newType)
-		} else {
-			pss.log.Errorf("forbidden to change sessionType from %v to %v", currentType, newType)
+			return nil, status.Errorf(codes.InvalidArgument, fmt.Sprintf("forbidden to rename %v to %v", instance, client))
 		}
 	}
 	go func() {
@@ -222,7 +223,7 @@ func (pss ProxyServiceServer) KVStoreGetValue(ctx context.Context, req *pb.KVKey
 
 	key := fmt.Sprintf("%s-%s", req.GetClient(), req.GetKey())
 
-	pss.log.Infof("[%v] %v -> /KVStoreGetValue(%s) -> %v", traceId, sourceInstance, key)
+	pss.log.Infof("[%v] %v -> /KVStoreGetValue(%s)", traceId, sourceInstance, key)
 
 	ret, err := pss.proxySession.proxy.getVar(key)
 	if err != nil {

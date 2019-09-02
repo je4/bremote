@@ -37,15 +37,17 @@ type ProxySession struct {
 	httpServerInt *http.Server
 	cmuxServer    *cmux.CMux
 	session       *yamux.Session
+	generic bool
 }
 
-func NewProxySession(instance string, session *yamux.Session, groups []string, sessionType common.SessionType, proxy *Proxy, log *logging.Logger) *ProxySession {
+func NewProxySession(instance string, session *yamux.Session, groups []string, sessionType common.SessionType, generic bool, proxy *Proxy, log *logging.Logger) *ProxySession {
 	ps := &ProxySession{instance: instance,
 		session: session,
 		proxy: proxy,
 		groups: groups,
 		log: log,
 		sessionType: sessionType,
+		generic:generic,
 	}
 	return ps
 }
@@ -272,6 +274,11 @@ func (ps *ProxySession) GetInstance() string {
 func (ps *ProxySession) GetSessionPtr() **yamux.Session {
 	return &ps.session
 }
+
+func (ps *ProxySession) IsGeneric() bool {
+	return ps.generic
+}
+
 
 func (ps *ProxySession) SetInstance(newinstance string) error {
 	if err := ps.proxy.RenameSession(ps.instance, newinstance); err != nil {

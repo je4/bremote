@@ -4,11 +4,11 @@ instancename = "controller02" # instance name
 proxy = "localhost:7777" # proxy addr:port
 #proxy = "vpn-de2.info-age.net:80" # proxy addr:port
 
-certpem = "C:/daten/go/certs/info_age_controller01.pem" # tls client certificate file in PEM format
-keypem = "C:/daten/go/certs/info_age_controller01.key" # tls client key file in PEM format
+certpem = "C:/daten/go/certs/info_age_controller02.pem" # tls client certificate file in PEM format
+keypem = "C:/daten/go/certs/info_age_controller02.key" # tls client key file in PEM format
 capem = "C:/daten/go/certs/info_age_ca.pem" # tls root certificate file in PEM format
-httpscertpem = "C:/daten/go/certs/info_age_controller01.pem" # tls client certificate file in PEM format
-httpskeypem = "C:/daten/go/certs/info_age_controller01.key" # tls client key file in PEM format
+httpscertpem = "C:/daten/go/certs/info_age_localhost.pem" # tls client certificate file in PEM format
+httpskeypem = "C:/daten/go/certs/info_age_localhost.key" # tls client key file in PEM format
 
 #certpem = "C:/daten/go/certs/bremote_client.pem" # tls client certificate file in PEM format
 #keypem = "C:/daten/go/certs/bremote_client.key" # tls client key file in PEM format

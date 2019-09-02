@@ -261,27 +261,40 @@ func (proxy *Proxy) Serve(listener net.Listener) error {
 		names := []string{}
 		types := []common.SessionType{}
 		state := tlscon.ConnectionState()
-		for _, v := range state.PeerCertificates {
-			group := fmt.Sprintf("%s/%s",
-				strings.Join(v.Subject.Organization, "/"),
-				strings.Join(v.Subject.OrganizationalUnit, "/"),
-			)
-			if len(v.Subject.CommonName) == 0 {
-				proxy.log.Errorf("no commonName in certificate: %v", v.Subject.String())
-				continue
-			}
-			for _, loc := range v.Subject.Locality {
-				t, ok := proxy.typeMap[loc]
-				if ok {
-					types = append(types, t)
+		for _, vs := range state.VerifiedChains {
+			for _, v := range vs {
+				// we are only interested in client certificates
+				// ignore the rest of the chain...
+				isClient := false
+				for _, eku := range v.ExtKeyUsage {
+					if eku == x509.ExtKeyUsageClientAuth {
+						isClient = true
+					}
 				}
-			}
+				if !isClient {
+					continue
+				}
+				group := fmt.Sprintf("%s/%s",
+					strings.Join(v.Subject.Organization, "/"),
+					strings.Join(v.Subject.OrganizationalUnit, "/"),
+				)
+				if len(v.Subject.CommonName) == 0 {
+					proxy.log.Errorf("no commonName in certificate: %v", v.Subject.String())
+					continue
+				}
+				for _, loc := range v.Subject.Locality {
+					t, ok := proxy.typeMap[loc]
+					if ok {
+						types = append(types, t)
+					}
+				}
 
-			groups = append(groups, group)
-			names = append(names, v.Subject.CommonName)
+				groups = append(groups, group)
+				names = append(names, v.Subject.CommonName)
+			}
 		}
 		if len(names) == 0 {
-			proxy.log.Error("no commonNames certificates")
+			proxy.log.Error("no commonName in certificates")
 			continue
 		}
 		sessionType := common.SessionType_Undefined
@@ -303,11 +316,12 @@ func (proxy *Proxy) Serve(listener net.Listener) error {
 
 func (proxy *Proxy) ServeSession(session *yamux.Session, groups []string, instancename string, sessionType common.SessionType) error {
 	// using master key means, that name has to be unique
-	if instancename == "master" {
+	generic := instancename == "master"
+	if  generic {
 		instancename = session.RemoteAddr().String()
 	}
 
-	ps := NewProxySession(instancename, session, groups, sessionType, proxy, proxy.log)
+	ps := NewProxySession(instancename, session, groups, sessionType, generic, proxy, proxy.log)
 	defer func() {
 		if err := ps.Close(); err != nil {
 			proxy.log.Errorf("error closing proxy session %v: %v", ps.GetInstance(), err)
