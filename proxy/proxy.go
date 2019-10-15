@@ -335,7 +335,7 @@ func (proxy *Proxy) setVar(key string, value string) error {
 	proxy.db.Lock()
 	defer proxy.db.Unlock()
 
-	if err := proxy.db.Put(key, []byte(value)); err != nil {
+	if err := proxy.db.Put([]byte(key), []byte(value)); err != nil {
 		return emperror.Wrapf(err, "cannot write key %s", key)
 	}
 	proxy.db.Sync()
@@ -346,7 +346,7 @@ func (proxy *Proxy) deleteVar(key string) error {
 	proxy.db.Lock()
 	defer proxy.db.Unlock()
 
-	if err := proxy.db.Delete(key); err != nil {
+	if err := proxy.db.Delete([]byte(key)); err != nil {
 		return emperror.Wrapf(err, "cannot delete key %s", key)
 	}
 	proxy.db.Sync()
@@ -356,7 +356,7 @@ func (proxy *Proxy) deleteVar(key string) error {
 func (proxy *Proxy) getVar(key string) (string, error) {
 	proxy.db.RLock()
 	defer proxy.db.Unlock()
-	val, err := proxy.db.Get(key)
+	val, err := proxy.db.Get([]byte(key))
 	if err != nil {
 		return "", emperror.Wrapf(err, "no value found for key %v", key)
 	}
@@ -367,8 +367,8 @@ func (proxy *Proxy) getKeys(prefix string) ([]string, error) {
 	proxy.db.RLock()
 	defer proxy.db.Unlock()
 	keys := []string{}
-	err := proxy.db.Scan(prefix, func(key string) error {
-		keys = append(keys, key)
+	err := proxy.db.Scan([]byte(prefix), func(key []byte) error {
+		keys = append(keys, string(key))
 		return nil
 	})
 	if err != nil {

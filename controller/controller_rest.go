@@ -1,14 +1,20 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/gorilla/mux"
 	pb "github.com/je4/bremote/api"
+	"github.com/je4/bremote/common"
 	"github.com/mintance/go-uniqid"
 	"io"
+	"net"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
+	"strings"
 )
 
 func dummy(w http.ResponseWriter, r *http.Request) {
@@ -18,7 +24,6 @@ func dummy(w http.ResponseWriter, r *http.Request) {
 func (controller *Controller) RestLogger() func(next http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Do stuff here
 			controller.log.Infof(r.RequestURI)
 			// Call the next handler, which can be another middleware in the chain, or the final handler.
 			next.ServeHTTP(w, r)
@@ -26,7 +31,44 @@ func (controller *Controller) RestLogger() func(next http.Handler) http.Handler 
 	}
 }
 
+func (controller *Controller) getProxyDirector() func(req *http.Request) {
+	target, _ := url.Parse("http://localhost:80/")
+	targetQuery := target.RawQuery
+	director := func(req *http.Request) {
+		//		vars := mux.Vars(req)
+		//		t := vars["target"]
+		req.URL.Scheme = target.Scheme
+		req.URL.Host = target.Host
+		req.URL.Path = common.SingleJoiningSlash(target.Path, req.URL.Path)
+		if targetQuery == "" || req.URL.RawQuery == "" {
+			req.URL.RawQuery = targetQuery + req.URL.RawQuery
+		} else {
+			req.URL.RawQuery = targetQuery + "&" + req.URL.RawQuery
+		}
+		if _, ok := req.Header["User-Agent"]; !ok {
+			// explicitly disable User-Agent so it's not set to default value
+			req.Header.Set("User-Agent", "")
+		}
+		req.Header.Set("X-Source-Instance", controller.GetInstance())
+	}
+
+	return director
+}
+
 func (controller *Controller) addRestRoutes(r *mux.Router) {
+
+	// the proxy
+	// ignore error because of static url, which must be correct
+	proxy := &httputil.ReverseProxy{Director: controller.getProxyDirector()}
+	proxy.Transport = &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			if controller.session == nil {
+				return nil, errors.New("no tls session available")
+			}
+			return controller.session.Open()
+		},
+	}
+
 	r.HandleFunc("/", dummy)
 	r.HandleFunc("/groups", controller.RestGroupList()).Methods("GET")
 	r.HandleFunc("/groups/{group}", controller.RestGroupGetMember()).Methods("GET")
@@ -35,10 +77,43 @@ func (controller *Controller) addRestRoutes(r *mux.Router) {
 	r.HandleFunc("/kvstore", controller.RestKVStoreList())
 	r.HandleFunc("/kvstore/{client}", controller.RestKVStoreClientList())
 	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValue()).Methods("GET")
-	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValuePut()).Methods("PUT")
+	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValuePut()).Methods("PUT", "POST")
 	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValueDelete()).Methods("DELETE")
 	r.HandleFunc("/client", controller.RestClientList())
 	r.HandleFunc("/client/{client}/navigate", controller.RestClientNavigate()).Methods("POST")
+	r.PathPrefix("/{target}/").Handler(proxy)
+
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			controller.log.Infof(r.RequestURI)
+			next.ServeHTTP(w, r)
+		})
+	})
+
+	r.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
+		pathTemplate, err := route.GetPathTemplate()
+		if err == nil {
+			fmt.Println("ROUTE:", pathTemplate)
+		}
+		pathRegexp, err := route.GetPathRegexp()
+		if err == nil {
+			fmt.Println("Path regexp:", pathRegexp)
+		}
+		queriesTemplates, err := route.GetQueriesTemplates()
+		if err == nil {
+			fmt.Println("Queries templates:", strings.Join(queriesTemplates, ","))
+		}
+		queriesRegexps, err := route.GetQueriesRegexp()
+		if err == nil {
+			fmt.Println("Queries regexps:", strings.Join(queriesRegexps, ","))
+		}
+		methods, err := route.GetMethods()
+		if err == nil {
+			fmt.Println("Methods:", strings.Join(methods, ","))
+		}
+		fmt.Println()
+		return nil
+	})
 }
 
 func (controller *Controller) RestGroupList() func(w http.ResponseWriter, r *http.Request) {

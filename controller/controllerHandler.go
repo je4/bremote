@@ -103,7 +103,7 @@ func (css ControllerServiceServer) NewClient(ctx context.Context, param *pb.NewC
 				return
 			}
 			nextStatus := autonav["nextstatus"].(string)
-			css.log.Infof("%v::NewClient(%v) - autonav: %v -> %v", client, u.String(), nextStatus)
+			css.log.Infof("%v::NewClient(%v) - autonav -> %v", client, u.String(), nextStatus)
 
 			cw := pb.NewClientWrapper(css.controller.instance, css.controller.GetSessionPtr())
 			traceId := uniqid.New(uniqid.Params{"traceid_", false})

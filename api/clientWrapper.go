@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/yamux"
 	"github.com/mintance/go-uniqid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/metadata"
 	"net"
 	"net/url"
@@ -19,14 +20,19 @@ type ClientWrapper struct {
 	instanceName        string
 	session             **yamux.Session
 	clientServiceClient *ClientServiceClient
+	conn                *grpc.ClientConn
 }
 
 func NewClientWrapper(instanceName string, session **yamux.Session) *ClientWrapper {
-	cw := &ClientWrapper{instanceName: instanceName, session: session, clientServiceClient: nil}
+	cw := &ClientWrapper{instanceName: instanceName,
+		session:             session,
+		clientServiceClient: nil,
+		conn:                nil,
+	}
 	return cw
 }
 
-func (cw *ClientWrapper) connect() error {
+func (cw *ClientWrapper) connect() (err error) {
 	if *cw.session == nil {
 		cw.clientServiceClient = nil
 		return errors.New(fmt.Sprintf("session closed"))
@@ -37,18 +43,31 @@ func (cw *ClientWrapper) connect() error {
 		return nil
 	}
 	// gRPC dial over incoming net.Conn
-	conn, err := grpc.Dial(":7777", grpc.WithInsecure(),
-		grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
-			if *cw.session == nil {
-				return nil, errors.New(fmt.Sprintf("session %s closed", s))
-			}
-			return (*cw.session).Open()
-		}),
-	)
-	if err != nil {
-		return errors.New("cannot dial grpc connection to :7777")
+	// singleton!!!
+	doDial := cw.conn == nil
+	if cw.conn != nil {
+		if cw.conn.GetState() == connectivity.TransientFailure {
+			cw.conn.Close()
+			doDial = true
+		}
+		if cw.conn.GetState() == connectivity.Shutdown {
+			doDial = true
+		}
 	}
-	c := NewClientServiceClient(conn)
+	if doDial {
+		cw.conn, err = grpc.Dial(":7777", grpc.WithInsecure(),
+			grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
+				if *cw.session == nil {
+					return nil, errors.New(fmt.Sprintf("session %s closed", s))
+				}
+				return (*cw.session).Open()
+			}),
+		)
+		if err != nil {
+			return errors.New("cannot dial grpc connection to :7777")
+		}
+	}
+	c := NewClientServiceClient(cw.conn)
 	cw.clientServiceClient = &c
 	return nil
 }
@@ -182,7 +201,7 @@ func (cw *ClientWrapper) WebsocketMessage(traceId string, sourceInstance string,
 		"sourceInstance", sourceInstance,
 		"targetInstance", targetInstance,
 		"traceId", traceId)
-	_, err := (*cw.clientServiceClient).WebsocketMessage(ctx, &Bytes{Value:data})
+	_, err := (*cw.clientServiceClient).WebsocketMessage(ctx, &Bytes{Value: data})
 	if err != nil {
 		return emperror.Wrapf(err, "error sending websocket message to %v", targetInstance)
 	}

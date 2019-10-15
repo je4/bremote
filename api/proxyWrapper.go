@@ -10,6 +10,7 @@ import (
 	"github.com/je4/bremote/common"
 	"github.com/mintance/go-uniqid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/metadata"
 	"net"
 )
@@ -18,6 +19,7 @@ type ProxyWrapper struct {
 	instanceName       string
 	session            **yamux.Session
 	proxyServiceClient *ProxyServiceClient
+	conn *grpc.ClientConn
 }
 
 func NewProxyWrapper(instanceName string, session **yamux.Session) *ProxyWrapper {
@@ -25,7 +27,7 @@ func NewProxyWrapper(instanceName string, session **yamux.Session) *ProxyWrapper
 	return cw
 }
 
-func (pw *ProxyWrapper) connect() error {
+func (pw *ProxyWrapper) connect() (err error) {
 	if *pw.session == nil {
 		pw.proxyServiceClient = nil
 		return errors.New(fmt.Sprintf("session closed"))
@@ -36,18 +38,31 @@ func (pw *ProxyWrapper) connect() error {
 		return nil
 	}
 	// gRPC dial over incoming net.Conn
-	conn, err := grpc.Dial(":7777", grpc.WithInsecure(),
-		grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
-			if *pw.session == nil {
-				return nil, errors.New(fmt.Sprintf("session %s closed", s))
-			}
-			return (*pw.session).Open()
-		}),
-	)
-	if err != nil {
-		return errors.New("cannot dial grpc connection to :7777")
+	// singleton!!!
+	doDial := pw.conn == nil
+	if pw.conn != nil {
+		if pw.conn.GetState() == connectivity.TransientFailure {
+			pw.conn.Close()
+			doDial = true
+		}
+		if pw.conn.GetState() == connectivity.Shutdown {
+			doDial = true
+		}
 	}
-	c := NewProxyServiceClient(conn)
+	if doDial {
+		pw.conn, err = grpc.Dial(":7777", grpc.WithInsecure(),
+			grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
+				if *pw.session == nil {
+					return nil, errors.New(fmt.Sprintf("session %s closed", s))
+				}
+				return (*pw.session).Open()
+			}),
+		)
+		if err != nil {
+			return errors.New("cannot dial grpc connection to :7777")
+		}
+	}
+	c := NewProxyServiceClient(pw.conn)
 	pw.proxyServiceClient = &c
 	return nil
 }

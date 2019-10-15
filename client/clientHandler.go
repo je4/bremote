@@ -118,7 +118,6 @@ func (css ClientServiceServer) Navigate(ctx context.Context, req *pb.NavigatePar
 	return &empty.Empty{}, nil
 }
 
-
 func (css ClientServiceServer) ShutdownBrowser(ctx context.Context, req *empty.Empty) (*empty.Empty, error) {
 	traceId, sourceInstance, targetInstance, err := common.RpcContextMetadata(ctx)
 	if err != nil {

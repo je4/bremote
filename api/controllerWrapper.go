@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/yamux"
 	"github.com/mintance/go-uniqid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/metadata"
 	"net"
 )
@@ -16,6 +17,7 @@ type ControllerWrapper struct {
 	instanceName       string
 	session            **yamux.Session
 	controllerServiceClient *ControllerServiceClient
+	conn *grpc.ClientConn
 }
 
 func NewControllerWrapper(instanceName string, session **yamux.Session) *ControllerWrapper {
@@ -23,7 +25,7 @@ func NewControllerWrapper(instanceName string, session **yamux.Session) *Control
 	return cw
 }
 
-func (pw *ControllerWrapper) connect() error {
+func (pw *ControllerWrapper) connect() (err error) {
 	if *pw.session == nil {
 		pw.controllerServiceClient = nil
 		return errors.New(fmt.Sprintf("session closed"))
@@ -34,18 +36,31 @@ func (pw *ControllerWrapper) connect() error {
 		return nil
 	}
 	// gRPC dial over incoming net.Conn
-	conn, err := grpc.Dial(":7777", grpc.WithInsecure(),
-		grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
-			if *pw.session == nil {
-				return nil, errors.New(fmt.Sprintf("session %s closed", s))
-			}
-			return (*pw.session).Open()
-		}),
-	)
-	if err != nil {
-		return errors.New("cannot dial grpc connection to :7777")
+	// singleton!!!
+	doDial := pw.conn == nil
+	if pw.conn != nil {
+		if pw.conn.GetState() == connectivity.TransientFailure {
+			pw.conn.Close()
+			doDial = true
+		}
+		if pw.conn.GetState() == connectivity.Shutdown {
+			doDial = true
+		}
 	}
-	c := NewControllerServiceClient(conn)
+	if doDial {
+		pw.conn, err = grpc.Dial(":7777", grpc.WithInsecure(),
+			grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
+				if *pw.session == nil {
+					return nil, errors.New(fmt.Sprintf("session %s closed", s))
+				}
+				return (*pw.session).Open()
+			}),
+		)
+		if err != nil {
+			return errors.New("cannot dial grpc connection to :7777")
+		}
+	}
+	c := NewControllerServiceClient(pw.conn)
 	pw.controllerServiceClient = &c
 	return nil
 }

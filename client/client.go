@@ -6,6 +6,9 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"github.com/chromedp/cdproto/emulation"
+	"github.com/chromedp/cdproto/page"
+	"github.com/chromedp/chromedp"
 	"github.com/goph/emperror"
 	"github.com/gorilla/mux"
 	"github.com/hashicorp/yamux"
@@ -18,6 +21,7 @@ import (
 	"google.golang.org/grpc"
 	"io/ioutil"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -87,7 +91,7 @@ func (client *Client) DeleteGroupWebsocket(group string) {
 	delete(client.wsGroup, group)
 }
 
-func (client *Client) GetGroupWebsocket(group string ) (*ClientWebsocket, error) {
+func (client *Client) GetGroupWebsocket(group string) (*ClientWebsocket, error) {
 	ws, ok := client.wsGroup[group]
 	if !ok {
 		return nil, errors.New(fmt.Sprintf("no websocket connection for group %v", group))
@@ -96,7 +100,7 @@ func (client *Client) GetGroupWebsocket(group string ) (*ClientWebsocket, error)
 
 }
 
-func (client *Client) SendGroupWebsocket(group string, message []byte ) error {
+func (client *Client) SendGroupWebsocket(group string, message []byte) error {
 	ws, err := client.GetGroupWebsocket(group)
 	if err != nil {
 		return emperror.Wrapf(err, "cannot send to group %v", group)
@@ -105,7 +109,6 @@ func (client *Client) SendGroupWebsocket(group string, message []byte ) error {
 	return nil
 
 }
-
 
 func (client *Client) GetBrowser() (*browser.Browser, error) {
 	if client.browser == nil {
@@ -144,10 +147,6 @@ func (client *Client) Connect() (err error) {
 	// have one. It's also possible to omit this in order to use the
 	// default root set of the current operating system.
 	roots := x509.NewCertPool()
-	ok := roots.AppendCertsFromPEM([]byte(rootPEM))
-	if !ok {
-		panic("failed to parse root certificate")
-	}
 	if client.caFile != "" {
 		bs, err := ioutil.ReadFile(client.caFile)
 		if err != nil {
@@ -394,11 +393,93 @@ func (client *Client) ServeHTTPExt() error {
 	return nil
 }
 
+// fullScreenshot takes a screenshot of the entire browser viewport.
+//
+// Liberally copied from puppeteer's source.
+//
+// Note: this will override the viewport emulation settings.
+func fullScreenshot(urlstr string, quality int64, res *[]byte) chromedp.Tasks {
+	return chromedp.Tasks{
+		chromedp.Navigate(urlstr),
+		chromedp.ActionFunc(func(ctx context.Context) error {
+			// get layout metrics
+			_, _, contentSize, err := page.GetLayoutMetrics().Do(ctx)
+			if err != nil {
+				return err
+			}
+
+			width, height := int64(math.Ceil(contentSize.Width)), int64(math.Ceil(contentSize.Height))
+
+			// force viewport emulation
+			err = emulation.SetDeviceMetricsOverride(width, height, 1, false).
+				WithScreenOrientation(&emulation.ScreenOrientation{
+					Type:  emulation.OrientationTypePortraitPrimary,
+					Angle: 0,
+				}).
+				Do(ctx)
+			if err != nil {
+				return err
+			}
+
+			// capture screenshot
+			*res, err = page.CaptureScreenshot().
+				WithQuality(quality).
+				WithClip(&page.Viewport{
+					X:      contentSize.X,
+					Y:      contentSize.Y,
+					Width:  contentSize.Width,
+					Height: contentSize.Height,
+					Scale:  1,
+				}).Do(ctx)
+			if err != nil {
+				return err
+			}
+			return nil
+		}),
+	}
+}
+
+func (client *Client) screenshot() func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		client.log.Info("screenshot()")
+		ctx, cancel := chromedp.NewContext(context.Background())
+		defer cancel()
+
+		chromedp.Run(ctx,
+			chromedp.ActionFunc(func(ctxt context.Context) error {
+				_, _, contentRect, err := page.GetLayoutMetrics().Do(ctxt)
+				if err != nil {
+					return err
+				}
+
+				v := page.Viewport{
+					X:      contentRect.X,
+					Y:      contentRect.Y,
+					Width:  contentRect.Width,
+					Height: contentRect.Height,
+					Scale:  1,
+				}
+				client.log.Infof("Capture %#v", v)
+				buf, err := page.CaptureScreenshot().WithClip(&v).Do(ctxt)
+				if err != nil {
+					return err
+				}
+				w.Header().Add("Content-Type", "image/png")
+				_, err = w.Write(buf)
+				if err != nil {
+					return emperror.Wrapf(err, "error writing captured image to output")
+				}
+				return nil
+			}))
+	}
+}
+
 func (client *Client) ServeHTTPInt(listener net.Listener) error {
 	httpservmux := http.NewServeMux()
 	// static files only from /static
 	fs := http.FileServer(http.Dir(client.httpStatic))
 	httpservmux.Handle("/static/", http.StripPrefix("/static/", fs))
+	httpservmux.HandleFunc("/screenshot", client.screenshot())
 
 	client.httpServerInt = &http.Server{Addr: ":80", Handler: httpservmux}
 

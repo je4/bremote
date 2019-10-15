@@ -421,15 +421,12 @@ func (controller *Controller) ServeHTTPInt(listener net.Listener) error {
 
 	fs := http.FileServer(http.Dir(controller.httpStatic))
 	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", fs))
-	//pattern := fmt.Sprintf("/%s/static/", controller.GetInstance())
-	//r.Handle(pattern, http.StripPrefix(pattern, fs))
+	r.PathPrefix("/templates/").HandlerFunc(controller.templateHandler())
 
 	controller.addRestRoutes(r)
 
 	r.Use(controller.RestLogger())
 
-	//	pattern = fmt.Sprintf("/%s/templates/", controller.GetInstance())
-	r.PathPrefix("/templates/").HandlerFunc(controller.templateHandler())
 
 	_ = func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
