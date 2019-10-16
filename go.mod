@@ -7,6 +7,7 @@ require (
 	github.com/bluele/gcache v0.0.0-20190518031135-bc40bd653833
 	github.com/chromedp/cdproto v0.0.0-20191013005325-ffea6b31d538
 	github.com/chromedp/chromedp v0.5.1
+	github.com/disintegration/imaging v1.6.1
 	github.com/golang/protobuf v1.3.2
 	github.com/goph/emperror v0.17.2
 	github.com/gorilla/mux v1.7.3

@@ -11,7 +11,7 @@ import (
 Websocket Echo Connection
 /echo/
 */
-func (client *Client) wsEcho() func(w http.ResponseWriter, r *http.Request) {
+func (client *BrowserClient) wsEcho() func(w http.ResponseWriter, r *http.Request) {
 	var upgrader = websocket.Upgrader{} // use default options
 
 	wsecho := func(w http.ResponseWriter, r *http.Request) {
@@ -42,7 +42,7 @@ func (client *Client) wsEcho() func(w http.ResponseWriter, r *http.Request) {
 Websocket Group Connection
 /ws/{group}/
 */
-func (client *Client) websocketGroup() func(w http.ResponseWriter, r *http.Request) {
+func (client *BrowserClient) websocketGroup() func(w http.ResponseWriter, r *http.Request) {
 	var upgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool { return true }, // upgrade all...
 	}

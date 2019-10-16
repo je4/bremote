@@ -53,6 +53,7 @@ func (css ControllerServiceServer) NewClient(ctx context.Context, param *pb.NewC
 
 	if stat != common.ClientStatus_Empty {
 		// todo: handle effective status of client
+
 		return &empty.Empty{}, nil
 	}
 

@@ -21,10 +21,10 @@ const (
 	maxMessageSize = 4096
 )
 
-// Client is a middleman between the websocket connection and the hub.
+// BrowserClient is a middleman between the websocket connection and the hub.
 type ClientWebsocket struct {
 	//	hub *Hub
-	client   *Client
+	client   *BrowserClient
 	group    string          // the output group
 	conn     *websocket.Conn // The websocket connection.
 	send     chan []byte     // Buffered channel of outbound messages.

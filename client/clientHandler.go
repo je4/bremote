@@ -16,11 +16,11 @@ import (
 )
 
 type ClientServiceServer struct {
-	client *Client
+	client *BrowserClient
 	log *logging.Logger
 }
 
-func NewClientServiceServer(client *Client, log *logging.Logger) ClientServiceServer {
+func NewClientServiceServer(client *BrowserClient, log *logging.Logger) ClientServiceServer {
 	css := ClientServiceServer{client:client, log: log}
 	return css
 }
@@ -49,6 +49,19 @@ func (css ClientServiceServer) StartBrowser(ctx context.Context, req *pb.Browser
 
 	css.log.Infof("[%v] %v -> %v/StartBrowser()", traceId, sourceInstance, targetInstance)
 
+	if css.client.browser != nil {
+		if css.client.browser.IsRunning() {
+			//css.client.SetStatus(common.ClientStatus_EmptyBrowser)
+			css.log.Infof("[%v] browser already running", traceId)
+			return &empty.Empty{}, nil
+		} else {
+			if err := css.client.browser.Startup(); err != nil {
+				css.log.Errorf("cannot startup browser: %v", err)
+				return nil, status.Errorf(codes.Internal, fmt.Sprintf("cannot cannot browser: %v", err))
+			}
+			return &empty.Empty{}, nil
+		}
+	}
 	// build option map
 	execOptions := make( map[string]interface{})
 	for _, opt := range req.Flags {
@@ -105,6 +118,12 @@ func (css ClientServiceServer) Navigate(ctx context.Context, req *pb.NavigatePar
 		css.log.Errorf("could not get browser: %v", err)
 		return nil, status.Errorf(codes.Internal, fmt.Sprintf("could not get browser: %v", err))
 	}
+	if !b.IsRunning() {
+		if err := b.Startup(); err != nil {
+			css.log.Errorf("could not start browser: %v", err)
+			return nil, status.Errorf(codes.Internal, fmt.Sprintf("could not start browser: %v", err))
+		}
+	}
 
 	tasks := chromedp.Tasks{
 		chromedp.Navigate(req.GetUrl()),
@@ -139,6 +158,9 @@ func (css ClientServiceServer) GetStatus(ctx context.Context, param *empty.Empty
 	}
 
 	css.log.Infof("[%v] %v -> %v/GetStatus()", traceId, sourceInstance, targetInstance)
+	if !css.client.browser.IsRunning() {
+		css.client.SetStatus(common.ClientStatus_Empty)
+	}
 	return &pb.String{Value:css.client.GetStatus()}, nil
 }
 

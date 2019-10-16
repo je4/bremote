@@ -6,6 +6,8 @@ import (
 	"github.com/prologic/bitcask"
 	"log"
 	"os"
+	"os/signal"
+	"syscall"
 )
 
 
@@ -48,20 +50,40 @@ func main() {
 	defer lf.Close()
 
 
-	db, err := bitcask.Open(config.KVDBFile)
+	db, err := bitcask.Open(config.KVDBFile, bitcask.WithSync(true))
 	if err != nil {
 		log.Panicf("Error opening key value store \"%s\": %v", config.KVDBFile, err)
 	}
-	defer db.Close()
+	defer func() {
+		log.Info("closing key value store")
+		db.Close()
+	}()
 
 	proxy, err := NewProxy(config, db, log)
 	if err != nil {
 		log.Fatalf("error creating proxy instance: %+v", err)
 	}
 
+	go func() {
+		sigint := make(chan os.Signal, 1)
+
+		// interrupt signal sent from terminal
+		signal.Notify(sigint, os.Interrupt)
+
+		signal.Notify(sigint, syscall.SIGTERM)
+		signal.Notify(sigint, syscall.SIGKILL)
+
+		<-sigint
+
+		// We received an interrupt signal, shut down.
+		log.Infof("shutdown requested")
+		proxy.Close()
+	}()
+
 	err = proxy.ListenServe()
 	if err != nil {
 		log.Fatalf("error listening: %+v", err)
 	}
+	log.Info("proxy ended")
 
 }

@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"strings"
 )
 
 func dummy(w http.ResponseWriter, r *http.Request) {
@@ -90,6 +89,7 @@ func (controller *Controller) addRestRoutes(r *mux.Router) {
 		})
 	})
 
+	/*
 	r.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
 		pathTemplate, err := route.GetPathTemplate()
 		if err == nil {
@@ -114,6 +114,8 @@ func (controller *Controller) addRestRoutes(r *mux.Router) {
 		fmt.Println()
 		return nil
 	})
+
+	 */
 }
 
 func (controller *Controller) RestGroupList() func(w http.ResponseWriter, r *http.Request) {

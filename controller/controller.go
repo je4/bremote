@@ -29,6 +29,7 @@ import (
 )
 
 type Controller struct {
+	sync.Mutex
 	log                *logging.Logger
 	instance           string
 	addr               string
@@ -142,8 +143,6 @@ func (controller *Controller) Connect() (err error) {
 	if controller.roots == nil {
 		controller.roots = x509.NewCertPool()
 		// todo: get rid of this...in a safe way
-
-
 		rootCert, err := ioutil.ReadFile(controller.httpsCertFile)
 		if err != nil {
 			controller.log.Panicf("error reading root certificate %v: %v", controller.httpsCertFile, err)
@@ -172,6 +171,12 @@ func (controller *Controller) Connect() (err error) {
 			if err != nil {
 				log.Fatalf("server: loadkeys: %s", err)
 			}
+			// get instance name from tls certificate
+			x509Cert, err := x509.ParseCertificate(cert.Certificate[0])
+			if err != nil {
+				log.Fatalf("server: x509.ParseCertificate: %s", err)
+			}
+			controller.instance = x509Cert.Subject.CommonName
 			certificates = append(certificates, cert)
 		}
 		controller.certificates = &certificates
@@ -313,10 +318,11 @@ func (controller *Controller) ServeCmux() error {
 	return nil
 }
 
-func (controller *Controller) ServeHTTPExt() error {
+func (controller *Controller) ServeHTTPExt() (err error) {
 	r := mux.NewRouter()
 	controller.addRestRoutes(r)
 
+	/*
 	err := r.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
 		pathTemplate, err := route.GetPathTemplate()
 		if err == nil {
@@ -341,6 +347,7 @@ func (controller *Controller) ServeHTTPExt() error {
 		fmt.Println()
 		return nil
 	})
+	*/
 
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -350,7 +357,6 @@ func (controller *Controller) ServeHTTPExt() error {
 			next.ServeHTTP(w, r)
 		})
 	})
-
 	controller.httpServerExt = &http.Server{Addr: controller.httpsAddr, Handler: r}
 
 	controller.log.Infof("launching external HTTPS on %s", controller.httpsAddr)
@@ -472,6 +478,9 @@ func (controller *Controller) ServeGRPC(listener net.Listener) error {
 }
 
 func (controller *Controller) Close() error {
+	controller.Lock()
+	defer controller.Unlock()
+
 	if controller.grpcServer != nil {
 		controller.grpcServer.GracefulStop()
 		controller.grpcServer = nil

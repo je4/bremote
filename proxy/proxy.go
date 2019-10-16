@@ -36,6 +36,7 @@ type Proxy struct {
 	typeMap  map[string]common.SessionType
 
 	sync.RWMutex
+	listener net.Listener
 }
 
 /*
@@ -192,14 +193,14 @@ func (proxy *Proxy) RenameSession(oldname string, newname string) error {
 
 func (proxy *Proxy) ListenServe() (err error) {
 
-	listener, err := net.Listen("tcp", proxy.addr)
+	proxy.listener, err = net.Listen("tcp", proxy.addr)
 	if err != nil {
 		return emperror.Wrapf(err, "cannot start tcp listener on %v", proxy.addr)
 	}
-	defer listener.Close()
+	defer proxy.listener.Close()
 
 	// da mux
-	m := cmux.New(listener)
+	m := cmux.New(proxy.listener)
 
 	httpL := m.Match(cmux.HTTP1Fast())
 	tlsL := m.Match(cmux.Any())
@@ -244,6 +245,10 @@ func (proxy *Proxy) Serve(listener net.Listener) error {
 		incoming, err := tlsListener.Accept()
 		if err != nil {
 			proxy.log.Errorf("couldn't accept incoming connection: %v", err)
+			if cmux.ErrListenerClosed == err {
+				proxy.log.Errorf("tls listener closed")
+				break
+			}
 			continue
 		}
 		tlscon, ok := incoming.(*tls.Conn)
@@ -338,7 +343,7 @@ func (proxy *Proxy) setVar(key string, value string) error {
 	if err := proxy.db.Put([]byte(key), []byte(value)); err != nil {
 		return emperror.Wrapf(err, "cannot write key %s", key)
 	}
-	proxy.db.Sync()
+	//proxy.db.Sync()
 	return nil
 }
 
@@ -349,7 +354,7 @@ func (proxy *Proxy) deleteVar(key string) error {
 	if err := proxy.db.Delete([]byte(key)); err != nil {
 		return emperror.Wrapf(err, "cannot delete key %s", key)
 	}
-	proxy.db.Sync()
+	//proxy.db.Sync()
 	return nil
 }
 
@@ -378,5 +383,6 @@ func (proxy *Proxy) getKeys(prefix string) ([]string, error) {
 }
 
 func (proxy *Proxy) Close() error {
+	proxy.listener.Close()
 	return nil
 }

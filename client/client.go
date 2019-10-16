@@ -6,9 +6,6 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"github.com/chromedp/cdproto/emulation"
-	"github.com/chromedp/cdproto/page"
-	"github.com/chromedp/chromedp"
 	"github.com/goph/emperror"
 	"github.com/gorilla/mux"
 	"github.com/hashicorp/yamux"
@@ -21,17 +18,15 @@ import (
 	"google.golang.org/grpc"
 	"io/ioutil"
 	"log"
-	"math"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"strings"
 	"sync"
 	"time"
 )
 
-type Client struct {
+type BrowserClient struct {
 	log           *logging.Logger
 	instance      string
 	addr          string
@@ -55,8 +50,8 @@ type Client struct {
 	wsGroup       map[string]*ClientWebsocket
 }
 
-func NewClient(config Config, log *logging.Logger) *Client {
-	client := &Client{log: log,
+func NewClient(config Config, log *logging.Logger) *BrowserClient {
+	client := &BrowserClient{log: log,
 		instance:      config.InstanceName,
 		addr:          config.Proxy,
 		httpStatic:    config.HttpStatic,
@@ -75,7 +70,7 @@ func NewClient(config Config, log *logging.Logger) *Client {
 	return client
 }
 
-func (client *Client) SetBrowser(browser *browser.Browser) error {
+func (client *BrowserClient) SetBrowser(browser *browser.Browser) error {
 	if client.browser != nil {
 		return errors.New("browser already exists")
 	}
@@ -83,15 +78,15 @@ func (client *Client) SetBrowser(browser *browser.Browser) error {
 	return nil
 }
 
-func (client *Client) SetGroupWebsocket(group string, ws *ClientWebsocket) {
+func (client *BrowserClient) SetGroupWebsocket(group string, ws *ClientWebsocket) {
 	client.wsGroup[group] = ws
 }
 
-func (client *Client) DeleteGroupWebsocket(group string) {
+func (client *BrowserClient) DeleteGroupWebsocket(group string) {
 	delete(client.wsGroup, group)
 }
 
-func (client *Client) GetGroupWebsocket(group string) (*ClientWebsocket, error) {
+func (client *BrowserClient) GetGroupWebsocket(group string) (*ClientWebsocket, error) {
 	ws, ok := client.wsGroup[group]
 	if !ok {
 		return nil, errors.New(fmt.Sprintf("no websocket connection for group %v", group))
@@ -100,7 +95,7 @@ func (client *Client) GetGroupWebsocket(group string) (*ClientWebsocket, error) 
 
 }
 
-func (client *Client) SendGroupWebsocket(group string, message []byte) error {
+func (client *BrowserClient) SendGroupWebsocket(group string, message []byte) error {
 	ws, err := client.GetGroupWebsocket(group)
 	if err != nil {
 		return emperror.Wrapf(err, "cannot send to group %v", group)
@@ -110,29 +105,35 @@ func (client *Client) SendGroupWebsocket(group string, message []byte) error {
 
 }
 
-func (client *Client) GetBrowser() (*browser.Browser, error) {
+func (client *BrowserClient) GetBrowser() (*browser.Browser, error) {
 	if client.browser == nil {
 		return nil, errors.New("browser not initialized")
 	}
 	return client.browser, nil
 }
 
-func (client *Client) SetStatus(status string) {
+func (client *BrowserClient) SetStatus(status string) {
 	client.status = status
 }
 
-func (client *Client) GetStatus() string {
+func (client *BrowserClient) GetStatus() string {
+	if client.status != "" {
+		if !(client.browser != nil && client.browser.IsRunning()) {
+			client.status = ""
+		}
+	}
 	return client.status
 }
 
-func (client *Client) GetInstance() string {
+func (client *BrowserClient) GetInstance() string {
 	return client.instance
 }
 
-func (client *Client) GetSessionPtr() **yamux.Session {
+func (client *BrowserClient) GetSessionPtr() **yamux.Session {
 	return &client.session
 }
-func (client *Client) ShutdownBrowser() error {
+
+func (client *BrowserClient) ShutdownBrowser() error {
 	if client.browser == nil {
 		return errors.New("no browser available")
 	}
@@ -141,7 +142,7 @@ func (client *Client) ShutdownBrowser() error {
 	return nil
 }
 
-func (client *Client) Connect() (err error) {
+func (client *BrowserClient) Connect() (err error) {
 
 	// First, create the set of root certificates. For this example we only
 	// have one. It's also possible to omit this in order to use the
@@ -165,6 +166,12 @@ func (client *Client) Connect() (err error) {
 		if err != nil {
 			log.Fatalf("server: loadkeys: %s", err)
 		}
+		// get instance name from tls certificate
+		x509Cert, err := x509.ParseCertificate(cert.Certificate[0])
+		if err != nil {
+			log.Fatalf("server: x509.ParseCertificate: %s", err)
+		}
+		client.instance = x509Cert.Subject.CommonName
 		certificates = append(certificates, cert)
 	}
 
@@ -189,7 +196,7 @@ func (client *Client) Connect() (err error) {
 	return
 }
 
-func (client *Client) Serve() error {
+func (client *BrowserClient) Serve() error {
 	waitTime := time.Second
 
 	for {
@@ -272,7 +279,7 @@ func (client *Client) Serve() error {
 	return nil
 }
 
-func (client *Client) InitProxy() error {
+func (client *BrowserClient) InitProxy() error {
 
 	pw := pb.NewProxyWrapper(client.instance, &client.session)
 
@@ -283,7 +290,7 @@ func (client *Client) InitProxy() error {
 	return nil
 }
 
-func (client *Client) ServeGRPC(listener net.Listener) error {
+func (client *BrowserClient) ServeGRPC(listener net.Listener) error {
 	// create a server instance
 	server := NewClientServiceServer(client, client.log)
 
@@ -301,7 +308,7 @@ func (client *Client) ServeGRPC(listener net.Listener) error {
 	return nil
 }
 
-func (client *Client) getProxyDirector() func(req *http.Request) {
+func (client *BrowserClient) getProxyDirector() func(req *http.Request) {
 	target, _ := url.Parse("http://localhost:80/")
 	targetQuery := target.RawQuery
 	director := func(req *http.Request) {
@@ -325,7 +332,7 @@ func (client *Client) getProxyDirector() func(req *http.Request) {
 	return director
 }
 
-func (client *Client) ServeHTTPExt() error {
+func (client *BrowserClient) ServeHTTPExt() (err error) {
 	r := mux.NewRouter()
 
 	// static files only from /static
@@ -356,6 +363,7 @@ func (client *Client) ServeHTTPExt() error {
 		})
 	})
 
+	/*
 	err := r.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
 		pathTemplate, err := route.GetPathTemplate()
 		if err == nil {
@@ -380,7 +388,7 @@ func (client *Client) ServeHTTPExt() error {
 		fmt.Println()
 		return nil
 	})
-
+	*/
 	client.httpServerExt = &http.Server{Addr: client.httpsAddr, Handler: r}
 
 	client.log.Infof("launching external HTTPS on %s", client.httpsAddr)
@@ -393,93 +401,34 @@ func (client *Client) ServeHTTPExt() error {
 	return nil
 }
 
-// fullScreenshot takes a screenshot of the entire browser viewport.
-//
-// Liberally copied from puppeteer's source.
-//
-// Note: this will override the viewport emulation settings.
-func fullScreenshot(urlstr string, quality int64, res *[]byte) chromedp.Tasks {
-	return chromedp.Tasks{
-		chromedp.Navigate(urlstr),
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			// get layout metrics
-			_, _, contentSize, err := page.GetLayoutMetrics().Do(ctx)
-			if err != nil {
-				return err
-			}
-
-			width, height := int64(math.Ceil(contentSize.Width)), int64(math.Ceil(contentSize.Height))
-
-			// force viewport emulation
-			err = emulation.SetDeviceMetricsOverride(width, height, 1, false).
-				WithScreenOrientation(&emulation.ScreenOrientation{
-					Type:  emulation.OrientationTypePortraitPrimary,
-					Angle: 0,
-				}).
-				Do(ctx)
-			if err != nil {
-				return err
-			}
-
-			// capture screenshot
-			*res, err = page.CaptureScreenshot().
-				WithQuality(quality).
-				WithClip(&page.Viewport{
-					X:      contentSize.X,
-					Y:      contentSize.Y,
-					Width:  contentSize.Width,
-					Height: contentSize.Height,
-					Scale:  1,
-				}).Do(ctx)
-			if err != nil {
-				return err
-			}
-			return nil
-		}),
-	}
-}
-
-func (client *Client) screenshot() func(w http.ResponseWriter, r *http.Request) {
+func (client *BrowserClient) screenshot(width int, height int, sigma float64) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		client.log.Info("screenshot()")
-		ctx, cancel := chromedp.NewContext(context.Background())
-		defer cancel()
 
-		chromedp.Run(ctx,
-			chromedp.ActionFunc(func(ctxt context.Context) error {
-				_, _, contentRect, err := page.GetLayoutMetrics().Do(ctxt)
-				if err != nil {
-					return err
-				}
-
-				v := page.Viewport{
-					X:      contentRect.X,
-					Y:      contentRect.Y,
-					Width:  contentRect.Width,
-					Height: contentRect.Height,
-					Scale:  1,
-				}
-				client.log.Infof("Capture %#v", v)
-				buf, err := page.CaptureScreenshot().WithClip(&v).Do(ctxt)
-				if err != nil {
-					return err
-				}
-				w.Header().Add("Content-Type", "image/png")
-				_, err = w.Write(buf)
-				if err != nil {
-					return emperror.Wrapf(err, "error writing captured image to output")
-				}
-				return nil
-			}))
+		buf, mime, err := client.browser.Screenshot(width, height, sigma)
+		if err != nil {
+			client.log.Errorf("cannot create screenshot: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(fmt.Sprintf("cannot create screenshot: %v", err)))
+			return
+		}
+		w.Header().Add("Content-Type", mime)
+		if _, err := w.Write(buf); err != nil {
+			client.log.Errorf("cannot write image data: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 	}
 }
 
-func (client *Client) ServeHTTPInt(listener net.Listener) error {
+func (client *BrowserClient) ServeHTTPInt(listener net.Listener) error {
 	httpservmux := http.NewServeMux()
 	// static files only from /static
 	fs := http.FileServer(http.Dir(client.httpStatic))
 	httpservmux.Handle("/static/", http.StripPrefix("/static/", fs))
-	httpservmux.HandleFunc("/screenshot", client.screenshot())
+	httpservmux.HandleFunc("/screenshot/full", client.screenshot(0, 0, 0))
+	httpservmux.HandleFunc("/screenshot/medium", client.screenshot(800, 600, 0))
+	httpservmux.HandleFunc("/screenshot/thumb", client.screenshot(240, 240, 1.5))
 
 	client.httpServerInt = &http.Server{Addr: ":80", Handler: httpservmux}
 
@@ -494,7 +443,7 @@ func (client *Client) ServeHTTPInt(listener net.Listener) error {
 	return nil
 }
 
-func (client *Client) ServeCmux() error {
+func (client *BrowserClient) ServeCmux() error {
 	if err := (*client.cmuxServer).Serve(); err != nil {
 		client.cmuxServer = nil
 		return emperror.Wrap(err, "cmux closed")
@@ -503,7 +452,7 @@ func (client *Client) ServeCmux() error {
 	return nil
 }
 
-func (client *Client) CloseServices() error {
+func (client *BrowserClient) CloseServices() error {
 	if client.grpcServer != nil {
 		client.grpcServer.GracefulStop()
 		client.grpcServer = nil
@@ -537,21 +486,24 @@ func (client *Client) CloseServices() error {
 	return nil
 }
 
-func (client *Client) Close() error {
+func (client *BrowserClient) Close() error {
 
 	if err := client.CloseServices(); err != nil {
 		return err
 	}
 
+	// we don't close the browser if connection is closed
+	/*
 	if client.browser != nil {
 		client.browser.Close()
 		client.browser = nil
 	}
+	*/
 
 	return nil
 }
 
-func (client *Client) Shutdown() error {
+func (client *BrowserClient) Shutdown() error {
 	err := client.Close()
 	client.end <- true
 	return err
