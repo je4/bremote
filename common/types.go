@@ -8,6 +8,7 @@ const (
 	SessionType_Client     SessionType = 1
 	SessionType_Controller SessionType = 2
 	SessionType_Proxy      SessionType = 3
+	SessionType_Actor      SessionType = 4
 )
 
 const (

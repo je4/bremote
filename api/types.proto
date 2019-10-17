@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package info_age.bremote;
 
-import "google/protobuf/any.proto";
+//import "google/protobuf/any.proto";
 
 option go_package="api";
 option java_package = "net.info-age.bremote.server";
@@ -23,6 +23,9 @@ enum ProxySessionType {
     Undefined = 0;
     Client = 1;
     Controller = 2;
+    Proxy = 3;
+    Actor = 4;
+
 }
 
 message ProxyClient {

@@ -2,7 +2,7 @@ logfile = "" # log file location
 loglevel = "DEBUG" # CRITICAL|ERROR|WARNING|NOTICE|INFO|DEBUG
 instancename = "" # instance name
 #proxy = "localhost:7777" # proxy addr:port
-proxy = "vpn-de2.info-age.net:443" # proxy addr:port
+proxy = "vpn-de2.info-age.net:80" # proxy addr:port
 
 certpem = "C:/daten/go/certs/info_age_controller02.pem" # tls client certificate file in PEM format
 keypem = "C:/daten/go/certs/info_age_controller02.key" # tls client key file in PEM format
