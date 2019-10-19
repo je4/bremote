@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/bluele/gcache"
 	"github.com/goph/emperror"
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/hashicorp/yamux"
 	pb "github.com/je4/bremote/api"
@@ -323,30 +324,30 @@ func (controller *Controller) ServeHTTPExt() (err error) {
 	controller.addRestRoutes(r)
 
 	/*
-	err := r.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
-		pathTemplate, err := route.GetPathTemplate()
-		if err == nil {
-			fmt.Println("ROUTE:", pathTemplate)
-		}
-		pathRegexp, err := route.GetPathRegexp()
-		if err == nil {
-			fmt.Println("Path regexp:", pathRegexp)
-		}
-		queriesTemplates, err := route.GetQueriesTemplates()
-		if err == nil {
-			fmt.Println("Queries templates:", strings.Join(queriesTemplates, ","))
-		}
-		queriesRegexps, err := route.GetQueriesRegexp()
-		if err == nil {
-			fmt.Println("Queries regexps:", strings.Join(queriesRegexps, ","))
-		}
-		methods, err := route.GetMethods()
-		if err == nil {
-			fmt.Println("Methods:", strings.Join(methods, ","))
-		}
-		fmt.Println()
-		return nil
-	})
+		err := r.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
+			pathTemplate, err := route.GetPathTemplate()
+			if err == nil {
+				fmt.Println("ROUTE:", pathTemplate)
+			}
+			pathRegexp, err := route.GetPathRegexp()
+			if err == nil {
+				fmt.Println("Path regexp:", pathRegexp)
+			}
+			queriesTemplates, err := route.GetQueriesTemplates()
+			if err == nil {
+				fmt.Println("Queries templates:", strings.Join(queriesTemplates, ","))
+			}
+			queriesRegexps, err := route.GetQueriesRegexp()
+			if err == nil {
+				fmt.Println("Queries regexps:", strings.Join(queriesRegexps, ","))
+			}
+			methods, err := route.GetMethods()
+			if err == nil {
+				fmt.Println("Methods:", strings.Join(methods, ","))
+			}
+			fmt.Println()
+			return nil
+		})
 	*/
 
 	r.Use(func(next http.Handler) http.Handler {
@@ -357,7 +358,26 @@ func (controller *Controller) ServeHTTPExt() (err error) {
 			next.ServeHTTP(w, r)
 		})
 	})
-	controller.httpServerExt = &http.Server{Addr: controller.httpsAddr, Handler: r}
+
+	headersOk := handlers.AllowedHeaders([]string{"Origin", "X-Requested-With", "Content-Type", "Accept", "Access-Control-Request-Method", "Authorization"})
+	originsOk := handlers.AllowedOrigins([]string{"*"})
+	methodsOk := handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "OPTIONS", "DELETE"})
+	credentialsOk := handlers.AllowCredentials()
+	ignoreOptions := handlers.IgnoreOptions()
+
+	// todo: correct cors handling!!!
+	controller.httpServerExt = &http.Server{
+		Addr: controller.httpsAddr,
+		Handler: handlers.CORS(
+			originsOk,
+			headersOk,
+			methodsOk,
+			credentialsOk,
+			ignoreOptions,
+		)(r),
+	}
+
+	//controller.httpServerExt = &http.Server{Addr: controller.httpsAddr, Handler: r}
 
 	controller.log.Infof("launching external HTTPS on %s", controller.httpsAddr)
 	err = controller.httpServerExt.ListenAndServeTLS(controller.httpsCertFile, controller.httpsKeyFile)
@@ -432,7 +452,6 @@ func (controller *Controller) ServeHTTPInt(listener net.Listener) error {
 	controller.addRestRoutes(r)
 
 	r.Use(controller.RestLogger())
-
 
 	_ = func(handler http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

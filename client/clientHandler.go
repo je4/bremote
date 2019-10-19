@@ -5,23 +5,23 @@ import (
 	"fmt"
 	"github.com/chromedp/chromedp"
 	"github.com/golang/protobuf/ptypes/empty"
-	"github.com/op/go-logging"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	pb "github.com/je4/bremote/api"
 	"github.com/je4/bremote/browser"
 	"github.com/je4/bremote/common"
+	"github.com/op/go-logging"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"io/ioutil"
 	"path/filepath"
 )
 
 type ClientServiceServer struct {
 	client *BrowserClient
-	log *logging.Logger
+	log    *logging.Logger
 }
 
 func NewClientServiceServer(client *BrowserClient, log *logging.Logger) ClientServiceServer {
-	css := ClientServiceServer{client:client, log: log}
+	css := ClientServiceServer{client: client, log: log}
 	return css
 }
 
@@ -63,7 +63,7 @@ func (css ClientServiceServer) StartBrowser(ctx context.Context, req *pb.Browser
 		}
 	}
 	// build option map
-	execOptions := make( map[string]interface{})
+	execOptions := make(map[string]interface{})
 	for _, opt := range req.Flags {
 		oval := opt.GetValue()
 		switch oval.(type) {
@@ -97,7 +97,7 @@ func (css ClientServiceServer) StartBrowser(ctx context.Context, req *pb.Browser
 		css.log.Errorf("error reading DevToolsActivePort: %v", err)
 		return nil, status.Errorf(codes.Internal, fmt.Sprintf("error reading DevToolsActivePort: %v", err))
 	}
-//	lines := bytes.Split(bs, []byte("\n"))
+	//	lines := bytes.Split(bs, []byte("\n"))
 	css.log.Debugf("DevToolsActivePort:\n%v", string(bs))
 
 	css.client.SetStatus(common.ClientStatus_EmptyBrowser)
@@ -161,7 +161,7 @@ func (css ClientServiceServer) GetStatus(ctx context.Context, param *empty.Empty
 	if !css.client.browser.IsRunning() {
 		css.client.SetStatus(common.ClientStatus_Empty)
 	}
-	return &pb.String{Value:css.client.GetStatus()}, nil
+	return &pb.String{Value: css.client.GetStatus()}, nil
 }
 
 func (css ClientServiceServer) SetStatus(ctx context.Context, param *pb.String) (*empty.Empty, error) {

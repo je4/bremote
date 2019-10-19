@@ -68,6 +68,10 @@ func (controller *Controller) addRestRoutes(r *mux.Router) {
 		},
 	}
 
+	r.PathPrefix("/").HandlerFunc(common.MakePreflightHandler(
+		controller.log,
+	)).Methods("OPTIONS")
+
 	r.HandleFunc("/", dummy)
 	r.HandleFunc("/groups", controller.RestGroupList()).Methods("GET")
 	r.HandleFunc("/groups/{group}", controller.RestGroupGetMember()).Methods("GET")
@@ -90,32 +94,32 @@ func (controller *Controller) addRestRoutes(r *mux.Router) {
 	})
 
 	/*
-	r.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
-		pathTemplate, err := route.GetPathTemplate()
-		if err == nil {
-			fmt.Println("ROUTE:", pathTemplate)
-		}
-		pathRegexp, err := route.GetPathRegexp()
-		if err == nil {
-			fmt.Println("Path regexp:", pathRegexp)
-		}
-		queriesTemplates, err := route.GetQueriesTemplates()
-		if err == nil {
-			fmt.Println("Queries templates:", strings.Join(queriesTemplates, ","))
-		}
-		queriesRegexps, err := route.GetQueriesRegexp()
-		if err == nil {
-			fmt.Println("Queries regexps:", strings.Join(queriesRegexps, ","))
-		}
-		methods, err := route.GetMethods()
-		if err == nil {
-			fmt.Println("Methods:", strings.Join(methods, ","))
-		}
-		fmt.Println()
-		return nil
-	})
+		r.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
+			pathTemplate, err := route.GetPathTemplate()
+			if err == nil {
+				fmt.Println("ROUTE:", pathTemplate)
+			}
+			pathRegexp, err := route.GetPathRegexp()
+			if err == nil {
+				fmt.Println("Path regexp:", pathRegexp)
+			}
+			queriesTemplates, err := route.GetQueriesTemplates()
+			if err == nil {
+				fmt.Println("Queries templates:", strings.Join(queriesTemplates, ","))
+			}
+			queriesRegexps, err := route.GetQueriesRegexp()
+			if err == nil {
+				fmt.Println("Queries regexps:", strings.Join(queriesRegexps, ","))
+			}
+			methods, err := route.GetMethods()
+			if err == nil {
+				fmt.Println("Methods:", strings.Join(methods, ","))
+			}
+			fmt.Println()
+			return nil
+		})
 
-	 */
+	*/
 }
 
 func (controller *Controller) RestGroupList() func(w http.ResponseWriter, r *http.Request) {
@@ -265,12 +269,11 @@ func (controller *Controller) RestKVStoreList() func(w http.ResponseWriter, r *h
 		}
 
 		result := map[string]interface{}{}
-		for key, val := range (*value) {
+		for key, val := range *value {
 			var d interface{}
 			json.Unmarshal([]byte(val), &d)
 			result[key] = d
 		}
-
 
 		json, err := json.Marshal(controller.kvs)
 		if err != nil {
@@ -298,7 +301,7 @@ func (controller *Controller) RestKVStoreClientList() func(w http.ResponseWriter
 		}
 
 		result := map[string]interface{}{}
-		for key, val := range (*value) {
+		for key, val := range *value {
 			var d interface{}
 			json.Unmarshal([]byte(val), &d)
 			result[key] = d
@@ -356,7 +359,7 @@ func (controller *Controller) RestKVStoreClientValuePut() func(w http.ResponseWr
 			return
 		}
 
-		err = controller.SetVar(client, key, data )
+		err = controller.SetVar(client, key, data)
 		if err != nil {
 			controller.log.Errorf("cannot set value: %v", err)
 			http.Error(w, fmt.Sprintf("cannot set value: %v", err), http.StatusInternalServerError)

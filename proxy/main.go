@@ -10,7 +10,6 @@ import (
 	"syscall"
 )
 
-
 func main() {
 	configFile := flag.String("cfg", "", "config file location")
 	logFile := flag.String("logfile", "", "log file location")
@@ -27,13 +26,13 @@ func main() {
 		config = LoadConfig(*configFile)
 	} else {
 		config = Config{
-			Logfile: *logFile,
-			Loglevel: *logLevel,
+			Logfile:      *logFile,
+			Loglevel:     *logLevel,
 			InstanceName: *instanceName,
-			CertPEM: *certPem,
-			KeyPEM: *keyPem,
-			CaPEM: *caPem,
-			TLSAddr:*addr,
+			CertPEM:      *certPem,
+			KeyPEM:       *keyPem,
+			CaPEM:        *caPem,
+			TLSAddr:      *addr,
 		}
 	}
 
@@ -42,13 +41,12 @@ func main() {
 		if err != nil {
 			log.Panic("cannot get hostname")
 		}
-		config.InstanceName = "proxy-"+h
+		config.InstanceName = "proxy-" + h
 	}
 
 	// create logger instance
 	log, lf := common.CreateLogger(config.InstanceName, config.Logfile, config.Loglevel)
 	defer lf.Close()
-
 
 	db, err := bitcask.Open(config.KVDBFile, bitcask.WithSync(true))
 	if err != nil {

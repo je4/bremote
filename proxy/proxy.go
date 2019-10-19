@@ -322,7 +322,7 @@ func (proxy *Proxy) Serve(listener net.Listener) error {
 func (proxy *Proxy) ServeSession(session *yamux.Session, groups []string, instancename string, sessionType common.SessionType) error {
 	// using master key means, that name has to be unique
 	generic := instancename == "master"
-	if  generic {
+	if generic {
 		instancename = session.RemoteAddr().String()
 	}
 

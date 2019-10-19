@@ -23,9 +23,9 @@ func main() {
 	addr := flag.String("proxy", "localhost:7777", "proxy addr:port")
 	httpStatic := flag.String("httpstatic", "", "folder with static files")
 	httpTemplates := flag.String("httptemplates", "", "folder with templates")
-	httpsCertPem := flag.String("httpscertpem", "", "tls client certificate file in PEM format" )
-	httpsKeyPem := flag.String("httpskeypem", "", "tls client key file in PEM format" )
-	httpsAddr := flag.String("httpsaddr", "", "local listen addr for https addr:port" )
+	httpsCertPem := flag.String("httpscertpem", "", "tls client certificate file in PEM format")
+	httpsKeyPem := flag.String("httpskeypem", "", "tls client key file in PEM format")
+	httpsAddr := flag.String("httpsaddr", "", "local listen addr for https addr:port")
 
 	flag.Parse()
 
@@ -34,18 +34,18 @@ func main() {
 		config = LoadConfig(*configFile)
 	} else {
 		config = Config{
-			Logfile: *logFile,
-			Loglevel: *logLevel,
-			InstanceName: *instanceName,
-			Proxy: *addr,
-			CertPEM: *certPem,
-			KeyPEM: *keyPem,
-			CaPEM: *caPem,
-			HttpStatic: *httpStatic,
+			Logfile:       *logFile,
+			Loglevel:      *logLevel,
+			InstanceName:  *instanceName,
+			Proxy:         *addr,
+			CertPEM:       *certPem,
+			KeyPEM:        *keyPem,
+			CaPEM:         *caPem,
+			HttpStatic:    *httpStatic,
 			HttpTemplates: *httpTemplates,
-			HttpsCertPEM:*httpsCertPem,
-			HttpsKeyPEM:*httpsKeyPem,
-			HttpsAddr:*httpsAddr,
+			HttpsCertPEM:  *httpsCertPem,
+			HttpsKeyPEM:   *httpsKeyPem,
+			HttpsAddr:     *httpsAddr,
 		}
 	}
 
@@ -54,7 +54,7 @@ func main() {
 		if err != nil {
 			log.Panic("cannot get hostname")
 		}
-		config.InstanceName = "client-"+h
+		config.InstanceName = "client-" + h
 	}
 
 	// create logger instance

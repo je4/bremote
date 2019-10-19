@@ -19,7 +19,7 @@ type ProxyWrapper struct {
 	instanceName       string
 	session            **yamux.Session
 	proxyServiceClient *ProxyServiceClient
-	conn *grpc.ClientConn
+	conn               *grpc.ClientConn
 }
 
 func NewProxyWrapper(instanceName string, session **yamux.Session) *ProxyWrapper {
@@ -237,7 +237,7 @@ func (cw *ProxyWrapper) WebsocketMessage(traceId string, targetGroup string, dat
 
 }
 
-func (cw *ProxyWrapper) KVStoreSetValue(client string, key string, value string, traceId string) (error) {
+func (cw *ProxyWrapper) KVStoreSetValue(client string, key string, value string, traceId string) error {
 	if traceId == "" {
 		traceId = uniqid.New(uniqid.Params{"traceid_", false})
 	}
@@ -247,11 +247,11 @@ func (cw *ProxyWrapper) KVStoreSetValue(client string, key string, value string,
 
 	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "traceid", traceId)
 	_, err := (*cw.proxyServiceClient).KVStoreSetValue(ctx, &KVSetValueMessage{
-		Key:                  &KVKeyMessage{
-			Client:               client,
-			Key:                  key,
+		Key: &KVKeyMessage{
+			Client: client,
+			Key:    key,
 		},
-		Value:                value,
+		Value: value,
 	})
 	if err != nil {
 		return emperror.Wrapf(err, "[%v] error setting %s-%s to %s", traceId, client, key, value)
@@ -269,17 +269,16 @@ func (cw *ProxyWrapper) KVStoreGetValue(client string, key string, traceId strin
 
 	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "traceid", traceId)
 	ret, err := (*cw.proxyServiceClient).KVStoreGetValue(ctx, &KVKeyMessage{
-			Client:               client,
-			Key:                  key,
-		})
+		Client: client,
+		Key:    key,
+	})
 	if err != nil {
 		return "", emperror.Wrapf(err, "[%v] error getting %s-%s", traceId, client, key)
 	}
 	return ret.GetValue(), nil
 }
 
-
-func (cw *ProxyWrapper) KVStoreDeleteValue(client string, key string, traceId string) (error) {
+func (cw *ProxyWrapper) KVStoreDeleteValue(client string, key string, traceId string) error {
 	if traceId == "" {
 		traceId = uniqid.New(uniqid.Params{"traceid_", false})
 	}
@@ -289,8 +288,8 @@ func (cw *ProxyWrapper) KVStoreDeleteValue(client string, key string, traceId st
 
 	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "traceid", traceId)
 	_, err := (*cw.proxyServiceClient).KVStoreDeleteValue(ctx, &KVKeyMessage{
-		Client:               client,
-		Key:                  key,
+		Client: client,
+		Key:    key,
 	})
 	if err != nil {
 		return emperror.Wrapf(err, "[%v] error getting %s-%s", traceId, client, key)
@@ -329,7 +328,7 @@ func (cw *ProxyWrapper) KVStoreClientList(client string, traceId string) (*map[s
 	}
 
 	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "traceid", traceId)
-	ret, err := (*cw.proxyServiceClient).KVStoreClientList(ctx, &String{Value:client})
+	ret, err := (*cw.proxyServiceClient).KVStoreClientList(ctx, &String{Value: client})
 	if err != nil {
 		return &map[string]string{}, emperror.Wrapf(err, "[%v] error getting kv store list", traceId)
 	}

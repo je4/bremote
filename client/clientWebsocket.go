@@ -24,10 +24,10 @@ const (
 // BrowserClient is a middleman between the websocket connection and the hub.
 type ClientWebsocket struct {
 	//	hub *Hub
-	client   *BrowserClient
-	group    string          // the output group
-	conn     *websocket.Conn // The websocket connection.
-	send     chan []byte     // Buffered channel of outbound messages.
+	client *BrowserClient
+	group  string          // the output group
+	conn   *websocket.Conn // The websocket connection.
+	send   chan []byte     // Buffered channel of outbound messages.
 }
 
 // readPump pumps messages from the websocket connection to the hub.
@@ -109,7 +109,7 @@ func (cws *ClientWebsocket) writePump() {
 			// Add queued chat messages to the current websocket message.
 			n := len(cws.send)
 			for i := 0; i < n; i++ {
-//				w.Write(newline)
+				//				w.Write(newline)
 				w.Write(<-cws.send)
 			}
 
@@ -124,7 +124,7 @@ func (cws *ClientWebsocket) writePump() {
 			if err := cws.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				cws.client.log.Errorf("ping message failed: %v", err)
 				// remove inactive group connection
-//				cws.client.DeleteGroupWebsocket(cws.group)
+				//				cws.client.DeleteGroupWebsocket(cws.group)
 				return
 			}
 			cws.client.log.Debug("websocket ping")

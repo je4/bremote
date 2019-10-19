@@ -118,8 +118,12 @@ func (client *BrowserClient) SetStatus(status string) {
 
 func (client *BrowserClient) GetStatus() string {
 	if client.status != "" {
-		if !(client.browser != nil && client.browser.IsRunning()) {
+		if client.browser == nil {
 			client.status = ""
+		} else {
+			if !client.browser.IsRunning() {
+				client.status = ""
+			}
 		}
 	}
 	return client.status
@@ -356,6 +360,10 @@ func (client *BrowserClient) ServeHTTPExt() (err error) {
 	r.PathPrefix("/ws/{group}").HandlerFunc(client.websocketGroup())
 	r.PathPrefix("/{target}/").Handler(proxy)
 
+	r.PathPrefix("/").HandlerFunc(common.MakePreflightHandler(
+		client.log,
+	)).Methods("OPTIONS")
+
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			client.log.Infof(r.RequestURI)
@@ -364,30 +372,30 @@ func (client *BrowserClient) ServeHTTPExt() (err error) {
 	})
 
 	/*
-	err := r.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
-		pathTemplate, err := route.GetPathTemplate()
-		if err == nil {
-			fmt.Println("ROUTE:", pathTemplate)
-		}
-		pathRegexp, err := route.GetPathRegexp()
-		if err == nil {
-			fmt.Println("Path regexp:", pathRegexp)
-		}
-		queriesTemplates, err := route.GetQueriesTemplates()
-		if err == nil {
-			fmt.Println("Queries templates:", strings.Join(queriesTemplates, ","))
-		}
-		queriesRegexps, err := route.GetQueriesRegexp()
-		if err == nil {
-			fmt.Println("Queries regexps:", strings.Join(queriesRegexps, ","))
-		}
-		methods, err := route.GetMethods()
-		if err == nil {
-			fmt.Println("Methods:", strings.Join(methods, ","))
-		}
-		fmt.Println()
-		return nil
-	})
+		err := r.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
+			pathTemplate, err := route.GetPathTemplate()
+			if err == nil {
+				fmt.Println("ROUTE:", pathTemplate)
+			}
+			pathRegexp, err := route.GetPathRegexp()
+			if err == nil {
+				fmt.Println("Path regexp:", pathRegexp)
+			}
+			queriesTemplates, err := route.GetQueriesTemplates()
+			if err == nil {
+				fmt.Println("Queries templates:", strings.Join(queriesTemplates, ","))
+			}
+			queriesRegexps, err := route.GetQueriesRegexp()
+			if err == nil {
+				fmt.Println("Queries regexps:", strings.Join(queriesRegexps, ","))
+			}
+			methods, err := route.GetMethods()
+			if err == nil {
+				fmt.Println("Methods:", strings.Join(methods, ","))
+			}
+			fmt.Println()
+			return nil
+		})
 	*/
 	client.httpServerExt = &http.Server{Addr: client.httpsAddr, Handler: r}
 
@@ -494,10 +502,10 @@ func (client *BrowserClient) Close() error {
 
 	// we don't close the browser if connection is closed
 	/*
-	if client.browser != nil {
-		client.browser.Close()
-		client.browser = nil
-	}
+		if client.browser != nil {
+			client.browser.Close()
+			client.browser = nil
+		}
 	*/
 
 	return nil

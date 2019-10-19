@@ -14,10 +14,10 @@ import (
 )
 
 type ControllerWrapper struct {
-	instanceName       string
-	session            **yamux.Session
+	instanceName            string
+	session                 **yamux.Session
 	controllerServiceClient *ControllerServiceClient
-	conn *grpc.ClientConn
+	conn                    *grpc.ClientConn
 }
 
 func NewControllerWrapper(instanceName string, session **yamux.Session) *ControllerWrapper {
@@ -82,7 +82,7 @@ func (cw *ControllerWrapper) Ping(traceId string, targetInstance string, param s
 	return pingResult.GetValue(), nil
 }
 
-func (cw *ControllerWrapper) NewClient(traceId string, targetInstance string, client string, clientStatus string, clientHttpAddr string) (error) {
+func (cw *ControllerWrapper) NewClient(traceId string, targetInstance string, client string, clientStatus string, clientHttpAddr string) error {
 	if traceId == "" {
 		traceId = uniqid.New(uniqid.Params{"traceid_", false})
 	}
@@ -95,7 +95,7 @@ func (cw *ControllerWrapper) NewClient(traceId string, targetInstance string, cl
 		"sourceInstance", cw.instanceName,
 		"targetInstance", targetInstance,
 		"traceid", traceId)
-	_, err := (*cw.controllerServiceClient).NewClient(ctx, &NewClientParam{Client: client, Status:clientStatus, HttpAddr:clientHttpAddr})
+	_, err := (*cw.controllerServiceClient).NewClient(ctx, &NewClientParam{Client: client, Status: clientStatus, HttpAddr: clientHttpAddr})
 	if err != nil {
 		return emperror.Wrapf(err, "error calling %x::NewClient(%s)", targetInstance, client)
 	}

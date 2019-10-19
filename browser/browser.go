@@ -4,33 +4,44 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/chromedp/cdproto/emulation"
+	"time"
+
+	//"github.com/chromedp/cdproto/emulation"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
 	"github.com/disintegration/imaging"
 	"github.com/goph/emperror"
 	"github.com/op/go-logging"
+	"golang.org/x/sync/semaphore"
 	"image"
 	"image/jpeg"
 	"io/ioutil"
-	"math"
 	"os"
 )
 
 type Browser struct {
-	allocCtx    context.Context
-	allocCancel context.CancelFunc
-	TaskCtx     context.Context
-	taskCancel  context.CancelFunc
-	browser     *chromedp.Browser
-	TempDir     string
-	opts        []chromedp.ExecAllocatorOption
-	log         *logging.Logger
+	allocCtx      context.Context
+	allocCancel   context.CancelFunc
+	TaskCtx       context.Context
+	taskCancel    context.CancelFunc
+	browser       *chromedp.Browser
+	TempDir       string
+	opts          []chromedp.ExecAllocatorOption
+	log           *logging.Logger
+	semScreenshot *semaphore.Weighted
 }
 
 func NewBrowser(execOptions map[string]interface{}, log *logging.Logger) (*Browser, error) {
-	browser := &Browser{log: log}
+	browser := &Browser{
+		log:           log,
+		semScreenshot: semaphore.NewWeighted(1),
+	}
 	return browser, browser.Init(execOptions)
+}
+
+func (browser *Browser) getTimeoutCtx(duration time.Duration) context.Context {
+	newCtx, _ := context.WithTimeout(browser.TaskCtx, 10*time.Second)
+	return newCtx
 }
 
 func (browser *Browser) Startup() error {
@@ -66,52 +77,43 @@ func (browser *Browser) Init(execOptions map[string]interface{}) error {
 // Liberally copied from puppeteer's source.
 //
 // Note: this will override the viewport emulation settings.
-func fullScreenshot(quality int64, res *[]byte) chromedp.Tasks {
+func fullScreenshot(quality int64, res *[]byte, logger *logging.Logger) chromedp.Tasks {
 	return chromedp.Tasks{
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			// get layout metrics
-			_, _, contentSize, err := page.GetLayoutMetrics().Do(ctx)
+			layoutViewport, visualViewport, contentSize, err := page.GetLayoutMetrics().Do(ctx)
 			if err != nil {
 				return err
 			}
-
-			width, height := int64(math.Ceil(contentSize.Width)), int64(math.Ceil(contentSize.Height))
-
-			// force viewport emulation
-			err = emulation.SetDeviceMetricsOverride(width, height, 1, false).
-				WithScreenOrientation(&emulation.ScreenOrientation{
-					Type:  emulation.OrientationTypePortraitPrimary,
-					Angle: 0,
-				}).
-				Do(ctx)
-			if err != nil {
-				return err
-			}
-
+			logger.Debugf("layoutViewport: %v", layoutViewport)
+			logger.Debugf("visualViewport: %v", visualViewport)
+			logger.Debugf("contentSize: %v", contentSize)
 			// capture screenshot
-			*res, err = page.CaptureScreenshot().
-				WithQuality(quality).
-				WithClip(&page.Viewport{
-					X:      contentSize.X,
-					Y:      contentSize.Y,
-					Width:  contentSize.Width,
-					Height: contentSize.Height,
-					Scale:  1,
-				}).Do(ctx)
+			*res, err = page.CaptureScreenshot().Do(ctx)
 			if err != nil {
-				return err
+				return emperror.Wrapf(err, "cannot capture screenshot")
 			}
 			return nil
 		}),
 	}
 }
 
-func (browser *Browser) Screenshot(width int, height int, sigma float64) ([]byte, string, error){
+func (browser *Browser) Screenshot(width int, height int, sigma float64) ([]byte, string, error) {
 	if !browser.IsRunning() {
 		return nil, "", errors.New("browser not running")
 	}
+	// screenshot is resource intense. disallow parallel use
+	if !browser.semScreenshot.TryAcquire(1) {
+		return nil, "", errors.New("cannot acquire semaphore")
+	}
+	browser.log.Debugf("acquire semaphore")
+	defer func() {
+		browser.semScreenshot.Release(1)
+		browser.log.Debugf("release semaphore")
+	}()
+
 	var bufIn []byte
-	if err := chromedp.Run(browser.TaskCtx, fullScreenshot(90, &bufIn)); err != nil {
+	if err := chromedp.Run(browser.getTimeoutCtx(30*time.Second), fullScreenshot(90, &bufIn, browser.log)); err != nil {
 		return nil, "", emperror.Wrapf(err, "cannot take screenshot")
 	}
 	// full size - no action
@@ -138,15 +140,28 @@ func (browser *Browser) Screenshot(width int, height int, sigma float64) ([]byte
 	return bufOut, "image/jpeg", nil
 }
 
+// checks whether browser is running. if not, clean up
 func (browser *Browser) IsRunning() bool {
 	if browser.TaskCtx == nil {
 		return false
 	}
-	return browser.TaskCtx.Err() == nil
+	if browser.TaskCtx.Err() != nil {
+		browser.Close()
+		return false
+	}
+	return true
 }
 
 func (browser *Browser) Tasks(tasks chromedp.Tasks) error {
-	if err := browser.TaskCtx.Err(); err != nil {
+	// screenshot is resource intense. wait until done...
+	browser.semScreenshot.Acquire(context.Background(), 1)
+	browser.log.Debugf("acquire semaphore")
+	defer func() {
+		browser.semScreenshot.Release(1)
+		browser.log.Debugf("release semaphore")
+	}()
+
+	if !browser.IsRunning() {
 		if err := browser.Startup(); err != nil {
 			return emperror.Wrap(err, "cannot re-initialize browser")
 		}
@@ -154,13 +169,43 @@ func (browser *Browser) Tasks(tasks chromedp.Tasks) error {
 			return emperror.Wrap(err, "cannot re-start browser")
 		}
 	}
-	return chromedp.Run(browser.TaskCtx, tasks)
+	// run the task in background and return after task is done or timeoiut
+	c1 := make(chan bool, 1)
+	go func() {
+		browser.log.Debugf("tasks started")
+		if err := chromedp.Run(browser.TaskCtx, tasks); err != nil {
+			browser.log.Errorf("error running task: %v", err)
+			c1 <- false
+			return
+		}
+		c1 <- true
+	}()
+	select {
+	case res := <-c1:
+		browser.log.Debugf("tasks returned: %v", res)
+	case <-time.After(5 * time.Second):
+		browser.log.Debugf("tasks timed out")
+	}
+	return nil
 }
 
 func (browser *Browser) Run() error {
 	browser.log.Debug("running browser")
-	if err := chromedp.Run(browser.TaskCtx); err != nil {
-		return emperror.Wrap(err, "cannot start chrome")
+	c1 := make(chan bool, 1)
+	go func() {
+		browser.log.Debugf("tasks started")
+		if err := chromedp.Run(browser.TaskCtx); err != nil {
+			browser.log.Errorf("cannot start chrome: %v", err)
+			c1 <- false
+			return
+		}
+		c1 <- true
+	}()
+	select {
+	case res := <-c1:
+		browser.log.Debugf("tasks returned: %v", res)
+	case <-time.After(5 * time.Second):
+		browser.log.Debugf("tasks timed out")
 	}
 	return nil
 }
@@ -171,11 +216,14 @@ func (browser *Browser) Close() {
 
 	if browser.taskCancel != nil {
 		browser.taskCancel()
+		browser.taskCancel = nil
 	}
 	if browser.allocCancel != nil {
 		browser.allocCancel()
+		browser.allocCancel = nil
 	}
 	if browser.TempDir != "" {
 		os.RemoveAll(browser.TempDir)
 	}
+	browser.TaskCtx = nil
 }

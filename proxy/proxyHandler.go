@@ -97,7 +97,7 @@ func (pss ProxyServiceServer) Init(ctx context.Context, param *pb.InitParam) (*e
 				pss.log.Errorf("[%v] error announcing %v to %v: %v", traceId, client, name, err)
 			}
 			// send only to first controller...
-			break;
+			break
 		}
 	}()
 
