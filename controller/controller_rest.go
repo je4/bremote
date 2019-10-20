@@ -82,8 +82,13 @@ func (controller *Controller) addRestRoutes(r *mux.Router) {
 	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValue()).Methods("GET")
 	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValuePut()).Methods("PUT", "POST")
 	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValueDelete()).Methods("DELETE")
-	r.HandleFunc("/client", controller.RestClientList())
+	// get parameter: withstatus
+	r.HandleFunc("/client", controller.RestClientList()).Methods("GET")
+	r.HandleFunc("/client/{client}", controller.RestClientStatus()).Methods("GET")
+	r.HandleFunc("/client/{client}/browserlog", controller.RestClientBrowserLog()).Methods("GET")
 	r.HandleFunc("/client/{client}/navigate", controller.RestClientNavigate()).Methods("POST")
+	r.HandleFunc("/controller", controller.RestControllerList()).Methods("GET")
+	r.HandleFunc("/controller/{controller}/templates", controller.RestControllerTemplates()).Methods("GET")
 	r.PathPrefix("/{target}/").Handler(proxy)
 
 	r.Use(func(next http.Handler) http.Handler {
@@ -235,16 +240,133 @@ func (controller *Controller) RestGroupDelete() func(w http.ResponseWriter, r *h
 	}
 }
 
+func (controller *Controller) RestClientStatus() func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		controller.log.Info("RestClientStatus()")
+		vars := mux.Vars(r)
+		client, ok := vars["client"]
+		if !ok {
+			controller.log.Errorf("no client")
+			http.Error(w, fmt.Sprintf("no client"), http.StatusInternalServerError)
+		}
+
+		cw := pb.NewClientWrapper(controller.instance, controller.GetSessionPtr())
+		traceId := uniqid.New(uniqid.Params{"traceid_", false})
+		ret, err := cw.GetStatus(traceId, client)
+		if err != nil {
+			controller.log.Errorf("cannot get status of %v: %v", client, err)
+			http.Error(w, fmt.Sprintf("cannot get status of %v: %v", client, err), http.StatusInternalServerError)
+		}
+
+		w.Header().Add("Content-Type", "application/json")
+		io.WriteString(w, ret)
+	}
+}
+
+func (controller *Controller) RestClientBrowserLog() func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		controller.log.Info("RestClientBrowserLog()")
+		vars := mux.Vars(r)
+		client, ok := vars["client"]
+		if !ok {
+			controller.log.Errorf("no client")
+			http.Error(w, fmt.Sprintf("no client"), http.StatusInternalServerError)
+		}
+
+		cw := pb.NewClientWrapper(controller.instance, controller.GetSessionPtr())
+		traceId := uniqid.New(uniqid.Params{"traceid_", false})
+		ret, err := cw.GetBrowserLog(traceId, client)
+		if err != nil {
+			controller.log.Errorf("cannot get status of %v: %v", client, err)
+			http.Error(w, fmt.Sprintf("cannot get status of %v: %v", client, err), http.StatusInternalServerError)
+		}
+		jsonstr, err := json.Marshal(ret)
+		if err != nil {
+			controller.log.Errorf("cannot marshall %v: %v", ret, err)
+			http.Error(w, fmt.Sprintf("cannot marshall %v: %v", ret, err), http.StatusInternalServerError)
+		}
+
+		w.Header().Add("Content-Type", "application/json")
+		io.WriteString(w, string(jsonstr))
+	}
+}
+
 func (controller *Controller) RestClientList() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		controller.log.Info("RestClientList()")
-		clients, err := controller.GetClients()
+		_, ok := r.URL.Query()["withstatus"]
+		clients, err := controller.GetClients(ok)
 		if err != nil {
 			controller.log.Errorf("cannot get clients: %v", err)
 			//http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
 			http.Error(w, fmt.Sprintf("cannot get clients: %v", err), http.StatusInternalServerError)
 			return
 		}
+		json, err := json.Marshal(clients)
+		if err != nil {
+			controller.log.Errorf("cannot marshal result: %v", err)
+			http.Error(w, fmt.Sprintf("cannot marshal result: %v", err), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Add("Content-Type", "application/json")
+		io.WriteString(w, string(json))
+	}
+}
+
+func (controller *Controller) RestControllerTemplates() func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		controller.log.Info("RestControllerTemplates()")
+		vars := mux.Vars(r)
+		cname, ok := vars["controller"]
+		if !ok {
+			controller.log.Errorf("no controller in url")
+			//http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+			http.Error(w, fmt.Sprintf("no controller in url"), http.StatusNotFound)
+			return
+		}
+		var templates []string
+		var err error
+		if cname == controller.instance {
+			templates, err = controller.GetTemplates()
+			if err != nil {
+				controller.log.Errorf("cannot get templates of %v: %v", cname, err)
+				http.Error(w, fmt.Sprintf("cannot get templates of %v: %v", cname, err), http.StatusInternalServerError)
+			}
+		} else {
+			cw := pb.NewControllerWrapper(controller.instance, controller.GetSessionPtr())
+			traceId := uniqid.New(uniqid.Params{"traceid_", false})
+			templates, err = cw.GetTemplates(traceId, cname)
+			if err != nil {
+				controller.log.Errorf("cannot get templates of %v: %v", cname, err)
+				http.Error(w, fmt.Sprintf("cannot get templates of %v: %v", cname, err), http.StatusInternalServerError)
+			}
+		}
+		jsonstr, err := json.Marshal(templates)
+		if err != nil {
+			controller.log.Errorf("cannot marshal result: %v", err)
+			http.Error(w, fmt.Sprintf("cannot marshal result: %v", err), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Add("Content-Type", "application/json")
+		io.WriteString(w, string(jsonstr))
+	}
+}
+
+func (controller *Controller) RestControllerList() func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		controller.log.Info("RestControllerList()")
+		clients, err := controller.GetControllers()
+		if err != nil {
+			controller.log.Errorf("cannot get controllers: %v", err)
+			//http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+			http.Error(w, fmt.Sprintf("cannot get controllers: %v", err), http.StatusInternalServerError)
+			return
+		}
+		clients = append(clients, common.ClientInfo{
+			InstanceName: controller.instance,
+			Status:       "",
+			Type:         common.SessionType_Controller,
+		})
 		json, err := json.Marshal(clients)
 		if err != nil {
 			controller.log.Errorf("cannot marshal result: %v", err)

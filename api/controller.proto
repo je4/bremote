@@ -13,6 +13,11 @@ message NewClientParam {
     string client = 1;
     string status = 2;
     string httpAddr = 3;
+    ProxySessionType type = 4;
+}
+
+message TemplateList {
+    repeated string template = 1;
 }
 
 service ControllerService {
@@ -20,4 +25,5 @@ service ControllerService {
     rpc NewClient( NewClientParam ) returns ( google.protobuf.Empty ) {};
     rpc RemoveClient( String ) returns ( google.protobuf.Empty ) {};
     rpc WebsocketMessage( Bytes ) returns (google.protobuf.Empty) {}
+    rpc GetTemplates( google.protobuf.Empty ) returns (TemplateList) {};
 }

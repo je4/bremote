@@ -69,6 +69,7 @@
         var nextPage = function() {
             lastTime = Date.now();
             var currentPage = flipBook.target._activePage || flipBook.object._activePage;
+            console.log("page: " + currentPage)
             if( currentPage == pageCount ) {
                 setTimeout(simplePages, [[.delay]]000);
             } else {

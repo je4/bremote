@@ -74,7 +74,7 @@ func (css ClientServiceServer) StartBrowser(ctx context.Context, req *pb.Browser
 		}
 	}
 
-	browser, err := browser.NewBrowser(execOptions, css.log)
+	browser, err := browser.NewBrowser(execOptions, css.log, css.client.writeBrowserLog)
 	if err != nil {
 		css.log.Errorf("initialize browser: %v", err)
 		return nil, status.Errorf(codes.Internal, fmt.Sprintf("cannot initialize browser: %v", err))
@@ -150,6 +150,21 @@ func (css ClientServiceServer) ShutdownBrowser(ctx context.Context, req *empty.E
 	return &empty.Empty{}, nil
 }
 
+func (css ClientServiceServer) GetBrowserLog(ctx context.Context, param *empty.Empty) (*pb.BrowserLog, error) {
+	traceId, sourceInstance, targetInstance, err := common.RpcContextMetadata(ctx)
+	if err != nil {
+		css.log.Errorf("invalid metadata in call to %v::GetStatus(): %v", css.client.GetInstance(), err)
+		return nil, status.Errorf(codes.Unavailable, fmt.Sprintf("invalid metadata: %v", err))
+	}
+
+	css.log.Infof("[%v] %v -> %v/GetBrowserLog()", traceId, sourceInstance, targetInstance)
+	if !css.client.browser.IsRunning() {
+		css.client.SetStatus(common.ClientStatus_Empty)
+	}
+
+	return &pb.BrowserLog{Entry: css.client.getBrowserLog()}, nil
+}
+
 func (css ClientServiceServer) GetStatus(ctx context.Context, param *empty.Empty) (*pb.String, error) {
 	traceId, sourceInstance, targetInstance, err := common.RpcContextMetadata(ctx)
 	if err != nil {
@@ -158,8 +173,12 @@ func (css ClientServiceServer) GetStatus(ctx context.Context, param *empty.Empty
 	}
 
 	css.log.Infof("[%v] %v -> %v/GetStatus()", traceId, sourceInstance, targetInstance)
-	if !css.client.browser.IsRunning() {
+	if css.client.browser == nil {
 		css.client.SetStatus(common.ClientStatus_Empty)
+	} else {
+		if !css.client.browser.IsRunning() {
+			css.client.SetStatus(common.ClientStatus_Empty)
+		}
 	}
 	return &pb.String{Value: css.client.GetStatus()}, nil
 }

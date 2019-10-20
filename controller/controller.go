@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"text/template"
@@ -300,10 +301,48 @@ func (controller *Controller) InitProxy() error {
 	return nil
 }
 
-func (controller *Controller) GetClients() ([]common.ClientInfo, error) {
+func (controller *Controller) GetTemplates() ([]string, error) {
+	libRegEx, err := regexp.Compile("^.+\\.(gohtml)$")
+	if err != nil {
+		return nil, emperror.Wrapf(err, "cannot create regexp")
+	}
+	templates := []string{}
+	err = filepath.Walk(controller.httpTemplates, func(path string, info os.FileInfo, err error) error {
+		if err == nil && libRegEx.MatchString(info.Name()) {
+			templates = append(templates, strings.TrimPrefix(strings.TrimPrefix(path, controller.httpTemplates), "/"))
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, emperror.Wrapf(err, "cannot read templates from %v", controller.httpTemplates)
+	}
+	return templates, nil
+}
+
+func (controller *Controller) GetClients(withStatus bool) ([]common.ClientInfo, error) {
 	pw := pb.NewProxyWrapper(controller.instance, controller.GetSessionPtr())
 	traceId := uniqid.New(uniqid.Params{"traceid_", false})
-	clients, err := pw.GetClients(traceId, common.SessionType_Client, true)
+	clients, err := pw.GetClients(traceId, common.SessionType_Client, withStatus)
+	if err != nil {
+		return []common.ClientInfo{}, emperror.Wrap(err, "cannot get clients")
+	}
+	return clients, nil
+}
+
+func (controller *Controller) GetControllers() ([]common.ClientInfo, error) {
+	pw := pb.NewProxyWrapper(controller.instance, controller.GetSessionPtr())
+	traceId := uniqid.New(uniqid.Params{"traceid_", false})
+	clients, err := pw.GetClients(traceId, common.SessionType_Controller, true)
+	if err != nil {
+		return []common.ClientInfo{}, emperror.Wrap(err, "cannot get clients")
+	}
+	return clients, nil
+}
+
+func (controller *Controller) GetActors() ([]common.ClientInfo, error) {
+	pw := pb.NewProxyWrapper(controller.instance, controller.GetSessionPtr())
+	traceId := uniqid.New(uniqid.Params{"traceid_", false})
+	clients, err := pw.GetClients(traceId, common.SessionType_Actor, true)
 	if err != nil {
 		return []common.ClientInfo{}, emperror.Wrap(err, "cannot get clients")
 	}

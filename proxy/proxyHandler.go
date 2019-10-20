@@ -93,7 +93,7 @@ func (pss ProxyServiceServer) Init(ctx context.Context, param *pb.InitParam) (*e
 
 			traceId = uniqid.New(uniqid.Params{"traceid_", false})
 			pss.log.Infof("[%v] announcing %v to %v", traceId, client, name)
-			if err := cw.NewClient(traceId, name, client, stat, httpAddr); err != nil {
+			if err := cw.NewClient(traceId, name, client, stat, httpAddr, newType); err != nil {
 				pss.log.Errorf("[%v] error announcing %v to %v: %v", traceId, client, name, err)
 			}
 			// send only to first controller...

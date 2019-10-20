@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/goph/emperror"
 	"github.com/hashicorp/yamux"
+	"github.com/je4/bremote/common"
 	"github.com/mintance/go-uniqid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"
@@ -82,7 +84,7 @@ func (cw *ControllerWrapper) Ping(traceId string, targetInstance string, param s
 	return pingResult.GetValue(), nil
 }
 
-func (cw *ControllerWrapper) NewClient(traceId string, targetInstance string, client string, clientStatus string, clientHttpAddr string) error {
+func (cw *ControllerWrapper) NewClient(traceId string, targetInstance string, client string, clientStatus string, clientHttpAddr string, clientType common.SessionType) error {
 	if traceId == "" {
 		traceId = uniqid.New(uniqid.Params{"traceid_", false})
 	}
@@ -95,9 +97,34 @@ func (cw *ControllerWrapper) NewClient(traceId string, targetInstance string, cl
 		"sourceInstance", cw.instanceName,
 		"targetInstance", targetInstance,
 		"traceid", traceId)
-	_, err := (*cw.controllerServiceClient).NewClient(ctx, &NewClientParam{Client: client, Status: clientStatus, HttpAddr: clientHttpAddr})
+	_, err := (*cw.controllerServiceClient).NewClient(ctx, &NewClientParam{
+		Client:   client,
+		Status:   clientStatus,
+		HttpAddr: clientHttpAddr,
+		Type:     ProxySessionType(clientType),
+	})
 	if err != nil {
 		return emperror.Wrapf(err, "error calling %x::NewClient(%s)", targetInstance, client)
 	}
 	return nil
+}
+
+func (cw *ControllerWrapper) GetTemplates(traceId string, targetInstance string) ([]string, error) {
+	if traceId == "" {
+		traceId = uniqid.New(uniqid.Params{"traceid_", false})
+	}
+
+	if err := cw.connect(); err != nil {
+		return nil, emperror.Wrapf(err, "cannot connect")
+	}
+
+	ctx := metadata.AppendToOutgoingContext(context.Background(),
+		"sourceInstance", cw.instanceName,
+		"targetInstance", targetInstance,
+		"traceid", traceId)
+	templates, err := (*cw.controllerServiceClient).GetTemplates(ctx, &empty.Empty{})
+	if err != nil {
+		return nil, emperror.Wrapf(err, "error calling %x::GetTemplates()", targetInstance)
+	}
+	return templates.Template, nil
 }

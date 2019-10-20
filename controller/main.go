@@ -93,7 +93,7 @@ func main() {
 					"kiosk":                               true,
 					"disable-session-crashed-bubble":      true,
 					"incognito":                           true,
-					"disable-features":                    "InfiniteSessionRestore",
+					"disable-features":                    "InfiniteSessionRestore,TranslateUI",
 					//"no-first-run":                        true,
 					"enable-fullscreen-toolbar-reveal": false,
 					"useAutomationExtension":           false,

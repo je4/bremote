@@ -57,68 +57,86 @@ func (css ControllerServiceServer) NewClient(ctx context.Context, param *pb.NewC
 		return &empty.Empty{}, nil
 	}
 
-	// new client should start the browser...
-	go func() {
+	// only clients should start browser
+		// new client should start the browser...
+		go func() {
 
-		time.Sleep(time.Millisecond * 300)
+			time.Sleep(time.Millisecond * 300)
 
-		cw := api.NewClientWrapper(css.controller.GetInstance(), css.controller.GetSessionPtr())
+			cw := api.NewClientWrapper(css.controller.GetInstance(), css.controller.GetSessionPtr())
 
-		opts := map[string]interface{}{
-			"headless":                            false,
-			"start-fullscreen":                    true,
-			"disable-notifications":               true,
-			"disable-infobars":                    true,
-			"disable-gpu":                         false,
-			"allow-insecure-localhost":            true,
-			"enable-immersive-fullscreen-toolbar": true,
-			"views-browser-windows":               false,
-			"kiosk":                               true,
-			"disable-session-crashed-bubble":      true,
-			"incognito":                           true,
-			"disable-features":                    "InfiniteSessionRestore",
-			//"no-first-run":                        true,
-			"enable-fullscreen-toolbar-reveal": false,
-			"useAutomationExtension":           false,
-			"enable-automation":                false,
-		}
-
-		traceId = uniqid.New(uniqid.Params{"traceid_", false})
-		css.log.Infof("[%v] starting browser of %v", traceId, client)
-		if err := cw.StartBrowser(traceId, client, &opts); err != nil {
-			css.log.Errorf("[%v] error starting client browser on %v: %v", traceId, client, err)
-		}
-
-		// check for autonavigation
-		data, err := css.controller.GetVar(client, "autonav")
-		if err == nil {
-			autonav := data.(map[string]interface{})
-			// check for url
-			urlstring, ok := autonav["url"]
-			if !ok {
-				return
-			}
-			u, err := url.Parse(urlstring.(string))
-			if err != nil {
-				css.log.Errorf("cannot parse url %v: %v", urlstring.(string), err)
-				return
-			}
-			nextStatus := autonav["nextstatus"].(string)
-			css.log.Infof("%v::NewClient(%v) - autonav -> %v", client, u.String(), nextStatus)
-
-			cw := pb.NewClientWrapper(css.controller.instance, css.controller.GetSessionPtr())
-			traceId := uniqid.New(uniqid.Params{"traceid_", false})
-			err = cw.Navigate(traceId, client, u, nextStatus)
-			if err != nil {
-				css.log.Errorf("cannot navigate to %v: %v", u.String(), err)
-				return
+			opts := map[string]interface{}{
+				"headless":                            false,
+				"start-fullscreen":                    true,
+				"disable-notifications":               true,
+				"disable-infobars":                    true,
+				"disable-gpu":                         false,
+				"allow-insecure-localhost":            true,
+				"enable-immersive-fullscreen-toolbar": true,
+				"views-browser-windows":               false,
+				"kiosk":                               true,
+				"disable-session-crashed-bubble":      true,
+				"incognito":                           true,
+				"disable-features":                    "InfiniteSessionRestore,TranslateUI",
+				//"no-first-run":                        true,
+				"enable-fullscreen-toolbar-reveal": false,
+				"useAutomationExtension":           false,
+				"enable-automation":                false,
 			}
 
-		}
+			traceId = uniqid.New(uniqid.Params{"traceid_", false})
+			css.log.Infof("[%v] starting browser of %v", traceId, client)
+			if err := cw.StartBrowser(traceId, client, &opts); err != nil {
+				css.log.Errorf("[%v] error starting client browser on %v: %v", traceId, client, err)
+			}
 
-	}()
+			// check for autonavigation
+			data, err := css.controller.GetVar(client, "autonav")
+			if err == nil {
+				autonav := data.(map[string]interface{})
+				// check for url
+				urlstring, ok := autonav["url"]
+				if !ok {
+					return
+				}
+				u, err := url.Parse(urlstring.(string))
+				if err != nil {
+					css.log.Errorf("cannot parse url %v: %v", urlstring.(string), err)
+					return
+				}
+				nextStatus := autonav["nextstatus"].(string)
+				css.log.Infof("%v::NewClient(%v) - autonav -> %v", client, u.String(), nextStatus)
+
+				cw := pb.NewClientWrapper(css.controller.instance, css.controller.GetSessionPtr())
+				traceId := uniqid.New(uniqid.Params{"traceid_", false})
+				err = cw.Navigate(traceId, client, u, nextStatus)
+				if err != nil {
+					css.log.Errorf("cannot navigate to %v: %v", u.String(), err)
+					return
+				}
+
+			}
+
+		}()
 
 	return &empty.Empty{}, nil
+}
+
+func (css ControllerServiceServer) GetTemplates(ctx context.Context, param *empty.Empty) (*pb.TemplateList, error) {
+	traceId, sourceInstance, targetInstance, err := common.RpcContextMetadata(ctx)
+	if err != nil {
+		css.log.Errorf("invalid metadata in call to %v: %v", "GetTemplates()", err)
+		return nil, status.Errorf(codes.Unavailable, fmt.Sprintf("invalid metadata: %v", err))
+	}
+	css.log.Infof("[%v] %v -> %v/GetTemplates()", traceId, sourceInstance, targetInstance)
+
+	templates, err := css.controller.GetTemplates()
+	if err != nil {
+		css.log.Errorf("cannot get templates: %v", err)
+		return nil, status.Errorf(codes.Internal, fmt.Sprintf("cannot get templates: %v", err))
+	}
+
+	return &pb.TemplateList{Template: templates}, nil
 }
 
 func (css ControllerServiceServer) RemoveClient(ctx context.Context, param *pb.String) (*empty.Empty, error) {

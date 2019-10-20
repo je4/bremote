@@ -14,6 +14,7 @@ import (
 	"github.com/je4/bremote/common"
 	"github.com/mintance/go-uniqid"
 	"github.com/op/go-logging"
+	"github.com/sahmad98/go-ringbuffer"
 	"github.com/soheilhy/cmux"
 	"google.golang.org/grpc"
 	"io/ioutil"
@@ -48,6 +49,7 @@ type BrowserClient struct {
 	browser       *browser.Browser
 	status        string
 	wsGroup       map[string]*ClientWebsocket
+	browserLog    *ringbuffer.RingBuffer
 }
 
 func NewClient(config Config, log *logging.Logger) *BrowserClient {
@@ -65,9 +67,28 @@ func NewClient(config Config, log *logging.Logger) *BrowserClient {
 		end:           make(chan bool, 1),
 		status:        common.ClientStatus_Empty,
 		wsGroup:       make(map[string]*ClientWebsocket),
+		browserLog:    ringbuffer.NewRingBuffer(100),
 	}
 
 	return client
+}
+
+func (client *BrowserClient) writeBrowserLog(format string, a ...interface{}) {
+	client.browserLog.Write(fmt.Sprintf(format, a...))
+}
+
+func (client *BrowserClient) getBrowserLog() []string {
+	result := []string{}
+	client.browserLog.Reader = client.browserLog.Writer
+	for i := 0; i < client.browserLog.Size; i++ {
+		elem := client.browserLog.Read()
+		str, ok := elem.(string)
+		if !ok {
+			continue
+		}
+		result = append(result, str)
+	}
+	return result
 }
 
 func (client *BrowserClient) SetBrowser(browser *browser.Browser) error {

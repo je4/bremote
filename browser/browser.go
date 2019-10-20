@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"github.com/chromedp/cdproto/runtime"
 	"time"
 
 	//"github.com/chromedp/cdproto/emulation"
@@ -29,12 +31,14 @@ type Browser struct {
 	opts          []chromedp.ExecAllocatorOption
 	log           *logging.Logger
 	semScreenshot *semaphore.Weighted
+	browserLog    func(string, ...interface{})
 }
 
-func NewBrowser(execOptions map[string]interface{}, log *logging.Logger) (*Browser, error) {
+func NewBrowser(execOptions map[string]interface{}, log *logging.Logger, browserLogFunc func(string, ...interface{})) (*Browser, error) {
 	browser := &Browser{
 		log:           log,
 		semScreenshot: semaphore.NewWeighted(1),
+		browserLog:    browserLogFunc,
 	}
 	return browser, browser.Init(execOptions)
 }
@@ -51,6 +55,19 @@ func (browser *Browser) Startup() error {
 	// also set up a custom logger
 	browser.TaskCtx, browser.taskCancel = chromedp.NewContext(browser.allocCtx, chromedp.WithLogf(browser.log.Debugf))
 
+	chromedp.ListenTarget(browser.TaskCtx, func(ev interface{}) {
+		switch ev := ev.(type) {
+		case *runtime.EventConsoleAPICalled:
+			str := fmt.Sprintf("%s - %s: ", ev.Timestamp.Time().Format(`2006-01-02T15:04:05`), ev.Type)
+			for idx, arg := range ev.Args {
+				if idx > 0 {
+					str += ` // `
+				}
+				str += fmt.Sprintf("[%s]%s", arg.Type, arg.Value)
+			}
+			browser.browserLog(str)
+		}
+	})
 	return nil
 }
 
