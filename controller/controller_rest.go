@@ -86,6 +86,7 @@ func (controller *Controller) addRestRoutes(r *mux.Router) {
 	r.HandleFunc("/client", controller.RestClientList()).Methods("GET")
 	r.HandleFunc("/client/{client}", controller.RestClientStatus()).Methods("GET")
 	r.HandleFunc("/client/{client}/browserlog", controller.RestClientBrowserLog()).Methods("GET")
+	r.HandleFunc("/client/{client}/addr", controller.RestClientHTTPSAddr()).Methods("GET")
 	r.HandleFunc("/client/{client}/navigate", controller.RestClientNavigate()).Methods("POST")
 	r.HandleFunc("/controller", controller.RestControllerList()).Methods("GET")
 	r.HandleFunc("/controller/{controller}/templates", controller.RestControllerTemplates()).Methods("GET")
@@ -146,6 +147,7 @@ func (controller *Controller) RestGroupList() func(w http.ResponseWriter, r *htt
 			return
 		}
 		w.Header().Add("Content-Type", "application/json")
+		w.Header().Add("Server", controller.servername)
 		io.WriteString(w, string(json))
 	}
 }
@@ -171,6 +173,7 @@ func (controller *Controller) RestGroupGetMember() func(w http.ResponseWriter, r
 			return
 		}
 		w.Header().Add("Content-Type", "application/json")
+		w.Header().Add("Server", controller.servername)
 		io.WriteString(w, string(json))
 	}
 }
@@ -217,6 +220,7 @@ func (controller *Controller) RestGroupAddInstance() func(w http.ResponseWriter,
 		}
 
 		w.Header().Add("Content-Type", "application/json")
+		w.Header().Add("Server", controller.servername)
 		io.WriteString(w, `{"status":"ok"}`)
 	}
 }
@@ -236,7 +240,32 @@ func (controller *Controller) RestGroupDelete() func(w http.ResponseWriter, r *h
 		}
 
 		w.Header().Add("Content-Type", "application/json")
+		w.Header().Add("Server", controller.servername)
 		io.WriteString(w, `"status":"ok"`)
+	}
+}
+
+func (controller *Controller) RestClientHTTPSAddr() func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		controller.log.Info("RestClientHTTPSAddr()")
+		vars := mux.Vars(r)
+		client, ok := vars["client"]
+		if !ok {
+			controller.log.Errorf("no client")
+			http.Error(w, fmt.Sprintf("no client"), http.StatusInternalServerError)
+		}
+
+		cw := pb.NewClientWrapper(controller.instance, controller.GetSessionPtr())
+		traceId := uniqid.New(uniqid.Params{"traceid_", false})
+		ret, err := cw.GetHTTPSAddr(traceId, client)
+		if err != nil {
+			controller.log.Errorf("cannot get status of %v: %v", client, err)
+			http.Error(w, fmt.Sprintf("cannot get status of %v: %v", client, err), http.StatusInternalServerError)
+		}
+
+		w.Header().Add("Content-Type", "application/json")
+		w.Header().Add("Server", controller.servername)
+		io.WriteString(w, ret)
 	}
 }
 
@@ -259,6 +288,7 @@ func (controller *Controller) RestClientStatus() func(w http.ResponseWriter, r *
 		}
 
 		w.Header().Add("Content-Type", "application/json")
+		w.Header().Add("Server", controller.servername)
 		io.WriteString(w, ret)
 	}
 }
@@ -287,6 +317,7 @@ func (controller *Controller) RestClientBrowserLog() func(w http.ResponseWriter,
 		}
 
 		w.Header().Add("Content-Type", "application/json")
+		w.Header().Add("Server", controller.servername)
 		io.WriteString(w, string(jsonstr))
 	}
 }
@@ -309,6 +340,7 @@ func (controller *Controller) RestClientList() func(w http.ResponseWriter, r *ht
 			return
 		}
 		w.Header().Add("Content-Type", "application/json")
+		w.Header().Add("Server", controller.servername)
 		io.WriteString(w, string(json))
 	}
 }
@@ -348,6 +380,7 @@ func (controller *Controller) RestControllerTemplates() func(w http.ResponseWrit
 			return
 		}
 		w.Header().Add("Content-Type", "application/json")
+		w.Header().Add("Server", controller.servername)
 		io.WriteString(w, string(jsonstr))
 	}
 }
@@ -374,6 +407,7 @@ func (controller *Controller) RestControllerList() func(w http.ResponseWriter, r
 			return
 		}
 		w.Header().Add("Content-Type", "application/json")
+		w.Header().Add("Server", controller.servername)
 		io.WriteString(w, string(json))
 	}
 }
@@ -404,6 +438,7 @@ func (controller *Controller) RestKVStoreList() func(w http.ResponseWriter, r *h
 			return
 		}
 		w.Header().Add("Content-Type", "application/json")
+		w.Header().Add("Server", controller.servername)
 		io.WriteString(w, string(json))
 	}
 }
@@ -436,6 +471,7 @@ func (controller *Controller) RestKVStoreClientList() func(w http.ResponseWriter
 			return
 		}
 		w.Header().Add("Content-Type", "application/json")
+		w.Header().Add("Server", controller.servername)
 		io.WriteString(w, string(json))
 	}
 }
@@ -460,6 +496,7 @@ func (controller *Controller) RestKVStoreClientValue() func(w http.ResponseWrite
 		}
 
 		w.Header().Add("Content-Type", "application/json")
+		w.Header().Add("Server", controller.servername)
 		io.WriteString(w, string(json))
 	}
 }
@@ -488,6 +525,7 @@ func (controller *Controller) RestKVStoreClientValuePut() func(w http.ResponseWr
 		}
 
 		w.Header().Add("Content-Type", "application/json")
+		w.Header().Add("Server", controller.servername)
 		io.WriteString(w, `{"status":"ok"}`)
 	}
 }
@@ -506,6 +544,7 @@ func (controller *Controller) RestKVStoreClientValueDelete() func(w http.Respons
 		}
 
 		w.Header().Add("Content-Type", "application/json")
+		w.Header().Add("Server", controller.servername)
 		io.WriteString(w, `{"status":"ok"}`)
 	}
 }
@@ -542,6 +581,7 @@ func (controller *Controller) RestClientNavigate() func(w http.ResponseWriter, r
 		}
 
 		w.Header().Add("Content-Type", "application/json")
+		w.Header().Add("Server", controller.servername)
 		io.WriteString(w, `{"status":"ok"}`)
 	}
 }

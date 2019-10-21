@@ -84,29 +84,37 @@ func (cw *ControllerWrapper) Ping(traceId string, targetInstance string, param s
 	return pingResult.GetValue(), nil
 }
 
-func (cw *ControllerWrapper) NewClient(traceId string, targetInstance string, client string, clientStatus string, clientHttpAddr string, clientType common.SessionType) error {
+func (cw *ControllerWrapper) NewClient(
+	traceId string,
+	targetInstance string,
+	client string,
+	clientStatus string,
+	clientHttpAddr string,
+	clientType common.SessionType,
+	initialize bool) (bool, error) {
 	if traceId == "" {
 		traceId = uniqid.New(uniqid.Params{"traceid_", false})
 	}
 
 	if err := cw.connect(); err != nil {
-		return emperror.Wrapf(err, "cannot connect")
+		return false, emperror.Wrapf(err, "cannot connect")
 	}
 
 	ctx := metadata.AppendToOutgoingContext(context.Background(),
 		"sourceInstance", cw.instanceName,
 		"targetInstance", targetInstance,
 		"traceid", traceId)
-	_, err := (*cw.controllerServiceClient).NewClient(ctx, &NewClientParam{
-		Client:   client,
-		Status:   clientStatus,
-		HttpAddr: clientHttpAddr,
-		Type:     ProxySessionType(clientType),
+	res, err := (*cw.controllerServiceClient).NewClient(ctx, &NewClientParam{
+		Client:     client,
+		Status:     clientStatus,
+		HttpAddr:   clientHttpAddr,
+		Type:       ProxySessionType(clientType),
+		Initialize: initialize,
 	})
 	if err != nil {
-		return emperror.Wrapf(err, "error calling %x::NewClient(%s)", targetInstance, client)
+		return false, emperror.Wrapf(err, "error calling %x::NewClient(%s)", targetInstance, client)
 	}
-	return nil
+	return res.GetInitialized(), nil
 }
 
 func (cw *ControllerWrapper) GetTemplates(traceId string, targetInstance string) ([]string, error) {

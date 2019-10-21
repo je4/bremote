@@ -58,9 +58,10 @@ type Controller struct {
 	templateDelimLeft  string
 	templateDelimRight string
 	templatesInternal  map[string]string
+	servername         string
 }
 
-func NewController(config Config, log *logging.Logger) *Controller {
+func NewController(config Config, servername string, log *logging.Logger) *Controller {
 	controller := &Controller{log: log,
 		instance:           config.InstanceName,
 		addr:               config.Proxy,
@@ -79,6 +80,7 @@ func NewController(config Config, log *logging.Logger) *Controller {
 		templateDelimLeft:  config.Templates.DelimLeft,
 		templateDelimRight: config.Templates.DelimRight,
 		templatesInternal:  make(map[string]string),
+		servername:         servername,
 	}
 	for _, internal := range config.Templates.Internal {
 		controller.templatesInternal[internal.Name] = internal.File
@@ -309,7 +311,7 @@ func (controller *Controller) GetTemplates() ([]string, error) {
 	templates := []string{}
 	err = filepath.Walk(controller.httpTemplates, func(path string, info os.FileInfo, err error) error {
 		if err == nil && libRegEx.MatchString(info.Name()) {
-			templates = append(templates, strings.TrimPrefix(strings.TrimPrefix(path, controller.httpTemplates), "/"))
+			templates = append(templates, strings.TrimPrefix(filepath.ToSlash(path), controller.httpTemplates+`/`))
 		}
 		return nil
 	})
@@ -355,76 +357,6 @@ func (controller *Controller) ServeCmux() error {
 		return emperror.Wrap(err, "cmux closed")
 	}
 	controller.cmuxServer = nil
-	return nil
-}
-
-func (controller *Controller) ServeHTTPExt() (err error) {
-	r := mux.NewRouter()
-	controller.addRestRoutes(r)
-
-	/*
-		err := r.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
-			pathTemplate, err := route.GetPathTemplate()
-			if err == nil {
-				fmt.Println("ROUTE:", pathTemplate)
-			}
-			pathRegexp, err := route.GetPathRegexp()
-			if err == nil {
-				fmt.Println("Path regexp:", pathRegexp)
-			}
-			queriesTemplates, err := route.GetQueriesTemplates()
-			if err == nil {
-				fmt.Println("Queries templates:", strings.Join(queriesTemplates, ","))
-			}
-			queriesRegexps, err := route.GetQueriesRegexp()
-			if err == nil {
-				fmt.Println("Queries regexps:", strings.Join(queriesRegexps, ","))
-			}
-			methods, err := route.GetMethods()
-			if err == nil {
-				fmt.Println("Methods:", strings.Join(methods, ","))
-			}
-			fmt.Println()
-			return nil
-		})
-	*/
-
-	r.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Do stuff here
-			controller.log.Debugf(r.RequestURI)
-			// Call the next handler, which can be another middleware in the chain, or the final handler.
-			next.ServeHTTP(w, r)
-		})
-	})
-
-	headersOk := handlers.AllowedHeaders([]string{"Origin", "X-Requested-With", "Content-Type", "Accept", "Access-Control-Request-Method", "Authorization"})
-	originsOk := handlers.AllowedOrigins([]string{"*"})
-	methodsOk := handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "OPTIONS", "DELETE"})
-	credentialsOk := handlers.AllowCredentials()
-	ignoreOptions := handlers.IgnoreOptions()
-
-	// todo: correct cors handling!!!
-	controller.httpServerExt = &http.Server{
-		Addr: controller.httpsAddr,
-		Handler: handlers.CORS(
-			originsOk,
-			headersOk,
-			methodsOk,
-			credentialsOk,
-			ignoreOptions,
-		)(r),
-	}
-
-	//controller.httpServerExt = &http.Server{Addr: controller.httpsAddr, Handler: r}
-
-	controller.log.Infof("launching external HTTPS on %s", controller.httpsAddr)
-	err = controller.httpServerExt.ListenAndServeTLS(controller.httpsCertFile, controller.httpsKeyFile)
-	if err != nil {
-		controller.httpServerExt = nil
-		return emperror.Wrapf(err, "failed to serve")
-	}
-	controller.httpServerExt = nil
 	return nil
 }
 
@@ -479,6 +411,53 @@ func (controller *Controller) templateHandler() func(w http.ResponseWriter, r *h
 		}
 	}
 	return hf
+}
+
+func (controller *Controller) ServeHTTPExt() (err error) {
+	r := mux.NewRouter()
+
+	fs := http.FileServer(http.Dir(controller.httpStatic))
+	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", fs))
+
+	controller.addRestRoutes(r)
+
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Do stuff here
+			controller.log.Debugf(r.RequestURI)
+			// Call the next handler, which can be another middleware in the chain, or the final handler.
+			next.ServeHTTP(w, r)
+		})
+	})
+
+	headersOk := handlers.AllowedHeaders([]string{"Origin", "X-Requested-With", "Content-Type", "Accept", "Access-Control-Request-Method", "Authorization"})
+	originsOk := handlers.AllowedOrigins([]string{"*"})
+	methodsOk := handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "OPTIONS", "DELETE"})
+	credentialsOk := handlers.AllowCredentials()
+	ignoreOptions := handlers.IgnoreOptions()
+
+	// todo: correct cors handling!!!
+	controller.httpServerExt = &http.Server{
+		Addr: controller.httpsAddr,
+		Handler: handlers.CORS(
+			originsOk,
+			headersOk,
+			methodsOk,
+			credentialsOk,
+			ignoreOptions,
+		)(r),
+	}
+
+	//controller.httpServerExt = &http.Server{Addr: controller.httpsAddr, Handler: r}
+
+	controller.log.Infof("launching external HTTPS on %s", controller.httpsAddr)
+	err = controller.httpServerExt.ListenAndServeTLS(controller.httpsCertFile, controller.httpsKeyFile)
+	if err != nil {
+		controller.httpServerExt = nil
+		return emperror.Wrapf(err, "failed to serve")
+	}
+	controller.httpServerExt = nil
+	return nil
 }
 
 func (controller *Controller) ServeHTTPInt(listener net.Listener) error {

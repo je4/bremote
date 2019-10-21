@@ -170,6 +170,22 @@ func (cw *ClientWrapper) GetBrowserLog(traceId string, targetInstance string) ([
 	return ret.GetEntry(), nil
 }
 
+func (cw *ClientWrapper) GetHTTPSAddr(traceId string, targetInstance string) (string, error) {
+	if traceId == "" {
+		traceId = uniqid.New(uniqid.Params{"traceid_", false})
+	}
+	if err := cw.connect(); err != nil {
+		return "", emperror.Wrapf(err, "cannot connect to %v", targetInstance)
+	}
+
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", targetInstance, "traceId", traceId)
+	ret, err := (*cw.clientServiceClient).GetHTTPSAddr(ctx, &empty.Empty{})
+	if err != nil {
+		return "", emperror.Wrapf(err, "error getting status of %v", targetInstance)
+	}
+	return ret.GetValue(), nil
+}
+
 func (cw *ClientWrapper) GetStatus(traceId string, targetInstance string) (string, error) {
 	if traceId == "" {
 		traceId = uniqid.New(uniqid.Params{"traceid_", false})

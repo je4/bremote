@@ -137,6 +137,10 @@ func (client *BrowserClient) SetStatus(status string) {
 	client.status = status
 }
 
+func (client *BrowserClient) GetHTTPAddr() string {
+	return client.httpsAddr
+}
+
 func (client *BrowserClient) GetStatus() string {
 	if client.status != "" {
 		if client.browser == nil {

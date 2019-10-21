@@ -183,6 +183,17 @@ func (css ClientServiceServer) GetStatus(ctx context.Context, param *empty.Empty
 	return &pb.String{Value: css.client.GetStatus()}, nil
 }
 
+func (css ClientServiceServer) GetHTTPSAddr(ctx context.Context, param *empty.Empty) (*pb.String, error) {
+	traceId, sourceInstance, targetInstance, err := common.RpcContextMetadata(ctx)
+	if err != nil {
+		css.log.Errorf("invalid metadata in call to %v::GetHTTPSAddr(): %v", css.client.GetInstance(), err)
+		return nil, status.Errorf(codes.Unavailable, fmt.Sprintf("invalid metadata: %v", err))
+	}
+
+	css.log.Infof("[%v] %v -> %v/GetHTTPSAddr()", traceId, sourceInstance, targetInstance)
+	return &pb.String{Value: css.client.GetHTTPAddr()}, nil
+}
+
 func (css ClientServiceServer) SetStatus(ctx context.Context, param *pb.String) (*empty.Empty, error) {
 	stat := param.GetValue()
 	traceId, sourceInstance, targetInstance, err := common.RpcContextMetadata(ctx)

@@ -13,6 +13,10 @@ import (
 	"time"
 )
 
+
+var version string = "0.2"
+var servername = "RemoteScreenController/" + version
+
 // static address to enable zero config distribution
 //const addr = `localhost:7777`
 
@@ -35,7 +39,7 @@ func main() {
 	log, lf := common.CreateLogger(config.InstanceName, config.Logfile, config.Loglevel)
 	defer lf.Close()
 
-	controller := NewController(config, log)
+	controller := NewController(config, servername, log)
 
 	go func() {
 		sigint := make(chan os.Signal, 1)
@@ -78,7 +82,7 @@ func main() {
 			if err != nil {
 				panic("invalid metadata")
 			}
-			controller.SetVar(client.InstanceName, "wstest.html", data)
+			//controller.SetVar(client.InstanceName, "wstest.html", data)
 
 			if client.Status == common.ClientStatus_Empty {
 				opts := map[string]interface{}{

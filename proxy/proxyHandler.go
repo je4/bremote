@@ -48,13 +48,15 @@ func (pss ProxyServiceServer) Init(ctx context.Context, param *pb.InitParam) (*e
 	client := param.GetInstance()
 	stat := param.GetStatus()
 	httpAddr := param.GetHttpAddr()
+	sessionType := param.GetSessionType()
 
-	pss.log.Infof("[%v] %v -> /Init( %v, %v, %v )", traceId, sourceInstance, client, pb.ProxySessionType_name[int32(param.GetSessionType())], stat)
+	pss.log.Infof("[%v] %v -> /Init( client:%v, type:%v, stat:%v, http:%v )",
+		traceId, sourceInstance, client, pb.ProxySessionType_name[int32(sessionType)], stat, httpAddr)
 
 	instance := pss.proxySession.GetInstance()
 	// set session typ only, if master key or undefined
 	currentType := pss.proxySession.GetSessionType()
-	newType := common.SessionType(param.SessionType)
+	newType := common.SessionType(sessionType)
 	if currentType != newType {
 		if currentType == common.SessionType_Undefined || pss.proxySession.IsGeneric() {
 			pss.proxySession.SetSessionType(newType)
@@ -79,7 +81,8 @@ func (pss ProxyServiceServer) Init(ctx context.Context, param *pb.InitParam) (*e
 	}
 	go func() {
 		time.Sleep(time.Millisecond * 300)
-
+		var initialize bool = true
+		var err error
 		for name, session := range pss.proxySession.GetProxy().GetSessions() {
 			// don't notify myself
 			if name == client {
@@ -89,15 +92,20 @@ func (pss ProxyServiceServer) Init(ctx context.Context, param *pb.InitParam) (*e
 			if session.GetSessionType() != common.SessionType_Controller {
 				continue
 			}
+			pss.log.Debugf("messaging controller %v: client:%v, stat:%v, httpAddr:%v, type:%v, init:%v",
+				name, client, stat, httpAddr, pb.ProxySessionType_name[int32(newType)], initialize)
 			cw := pb.NewControllerWrapper(name, session.GetSessionPtr())
 
 			traceId = uniqid.New(uniqid.Params{"traceid_", false})
 			pss.log.Infof("[%v] announcing %v to %v", traceId, client, name)
-			if err := cw.NewClient(traceId, name, client, stat, httpAddr, newType); err != nil {
+			var initialized bool
+			initialized, err = cw.NewClient(traceId, name, client, stat, httpAddr, newType, initialize)
+			if err != nil {
 				pss.log.Errorf("[%v] error announcing %v to %v: %v", traceId, client, name, err)
+				continue
 			}
-			// send only to first controller...
-			break
+			// once false must stay false
+			initialize = !initialized && initialize
 		}
 	}()
 

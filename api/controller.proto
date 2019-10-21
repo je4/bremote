@@ -14,15 +14,20 @@ message NewClientParam {
     string status = 2;
     string httpAddr = 3;
     ProxySessionType type = 4;
+    bool initialize = 5;
 }
 
 message TemplateList {
     repeated string template = 1;
 }
 
+message NewClientResult {
+    bool initialized = 1;
+}
+
 service ControllerService {
     rpc Ping( String ) returns ( String ) {};
-    rpc NewClient( NewClientParam ) returns ( google.protobuf.Empty ) {};
+    rpc NewClient( NewClientParam ) returns ( NewClientResult ) {};
     rpc RemoveClient( String ) returns ( google.protobuf.Empty ) {};
     rpc WebsocketMessage( Bytes ) returns (google.protobuf.Empty) {}
     rpc GetTemplates( google.protobuf.Empty ) returns (TemplateList) {};

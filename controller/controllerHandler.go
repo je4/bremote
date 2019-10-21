@@ -40,7 +40,7 @@ func (css ControllerServiceServer) Ping(ctx context.Context, param *pb.String) (
 	return ret, nil
 }
 
-func (css ControllerServiceServer) NewClient(ctx context.Context, param *pb.NewClientParam) (*empty.Empty, error) {
+func (css ControllerServiceServer) NewClient(ctx context.Context, param *pb.NewClientParam) (*pb.NewClientResult, error) {
 	traceId, sourceInstance, targetInstance, err := common.RpcContextMetadata(ctx)
 	if err != nil {
 		css.log.Errorf("invalid metadata in call to %v: %v", "StartBrowser()", err)
@@ -49,16 +49,18 @@ func (css ControllerServiceServer) NewClient(ctx context.Context, param *pb.NewC
 
 	client := param.GetClient()
 	stat := param.GetStatus()
-	css.log.Infof("[%v] %v -> %v/NewClient( %v, %v )", traceId, sourceInstance, targetInstance, client, stat)
+	initialize := param.GetInitialize()
+	css.log.Infof("[%v] %v -> %v/NewClient( client:%v, stat:%v, init:%v )", traceId, sourceInstance, targetInstance, client, stat, initialize)
 
 	if stat != common.ClientStatus_Empty {
 		// todo: handle effective status of client
 
-		return &empty.Empty{}, nil
+		return &pb.NewClientResult{Initialized: false}, nil
 	}
 
 	// only clients should start browser
-		// new client should start the browser...
+	// new client should start the browser...
+	if param.GetInitialize() {
 		go func() {
 
 			time.Sleep(time.Millisecond * 300)
@@ -118,8 +120,8 @@ func (css ControllerServiceServer) NewClient(ctx context.Context, param *pb.NewC
 			}
 
 		}()
-
-	return &empty.Empty{}, nil
+	}
+	return &pb.NewClientResult{Initialized: true}, nil
 }
 
 func (css ControllerServiceServer) GetTemplates(ctx context.Context, param *empty.Empty) (*pb.TemplateList, error) {
