@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>
+        Impressions from HGK Archive
+    </title>
+    <style>
+        #mainVideo {
+            position: absolute;
+            left: 0;
+            right: 0;
+        }
+        #canvas {
+            position: absolute;
+            left: 0;
+            right: 0;
+            transform: rotate(20deg);
+        }
+    </style>
+    <script>
+        window.onerror = function(error, url, line) {
+        //alert('ERR:'+error+' URL:'+url+' L:'+line);
+        };
+    </script>
+</head>
+<body>
+<video style="visibility: hidden;" id="mainVideo" src="[[.video]]"></video>
+<canvas id="canvas"></canvas>
+<div id="msg"></div>
+<div id="msg2"></div>
+<div id="msg3"></div>
+
+<script>
+    function setMaxSize( object, w, h ) {
+        const ww = window.innerWidth
+        const wh = window.innerHeight
+        const aspectA = w/h
+        const aspectB = ww/wh
+
+        if ( aspectB > aspectA ) {
+            object.style.height = wh + 'px'
+            object.style.width = Math.round(wh*aspectA) + 'px'
+        } else {
+            object.style.width = ww + 'px'
+            object.style.height = Math.round(ww/aspectA) + 'px'
+        }
+
+    }
+
+    async function playVideo() {
+        console.log("playVideo()")
+        // click once on the browser to emulate user interaction with the website
+        const response = await fetch('/browser/click?x=10&y=10')
+        let video = document.getElementById('mainVideo');
+        const playPromise = video.play();
+        if (playPromise !== null){
+            playPromise.catch((e) => {
+                console.error( 'playVideo() - catch', e.message)
+                alert( 'playVideo() - catch' + e.message)
+                setTimeout(playVideo, 1000 )
+            })
+        } else {
+            console.error( 'playVideo() - no promise')
+            setTimeout(playVideo, 1000 )
+        }
+
+    }
+    let canvas = document.getElementById('canvas');
+    let video = document.getElementById('mainVideo');
+    let msg = document.getElementById('msg');
+    let msg2 = document.getElementById('msg2');
+    let msg3 = document.getElementById('msg3');
+    let ctx = canvas.getContext('2d');
+    video.addEventListener('loadedmetadata', function() {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+//        setMaxSize(canvas, video.videoWidth, video.videoHeight)
+    });
+    video.addEventListener('canplay', (event) => {
+        playVideo()
+    });
+    video.addEventListener('play', function() {
+        var $this = this; //cache
+        (function loop() {
+            if (!$this.paused && !$this.ended) {
+                ctx.drawImage($this, 0, 0);
+                setTimeout(loop, 1000 / [[.fps]]) // drawing at [[.fps]]fps
+            }
+        })();
+    }, 0);
+
+    let posX = [[.startX]]
+    let posXVideoTime = 0
+    const increment = 3
+    const posFrames = 3
+    const maxX = [[.maxX]];
+    (function move() {
+        posX = (posX+increment) % [[.maxX]]
+        posXVideoTime = video.currentTime
+        canvas.style.left = posX + 'px'
+        msg.innerText = Date.now() + ' : ' + (posX - [[.startX]]) + ' : ' + video.currentTime
+        setTimeout( move, posFrames*1000 / [[.fps]]) // refresh every 3rd frame
+    })()
+
+    // do the synchronization stuff
+    var socket = new WebSocket('[[.wsAddr]]/video_test');
+    socket.onopen = function () {
+        if ( [[.syncMaster]] ) {
+            (function sync() {
+                const now = Date.now()
+                const currTime = video.currentTime
+                socket.send(JSON.stringify({
+                    time:now,
+                    videoPos:currTime,
+                    xPos: posX - [[.startX]],
+                }))
+                setTimeout(sync, 100*1000/[[.fps]])  // sync every 300 frames
+            })();
+    }
+
+
+    socket.onmessage = function(evt){
+        if ( ![[.syncMaster]] ) {
+            const currTime = Date.now()
+            let data = JSON.parse(evt.data)
+            const delta = currTime - data.time
+            const deltaSec = delta/1000
+            const deltaPos = deltaSec / (posFrames / [[.fps]])
+            const corrVideoPos = data.videoPos + deltaSec
+            const corrXPos = data.xPos + deltaPos
+
+            if (Math.abs(video.currentTime - corrVideoPos) > 0.05) {
+                video.currentTime = corrVideoPos
+                msg3.innerHTML = '<tt>seek video from ' + video.currentTime + ' to ' + (corrVideoPos)
+                + '</tt>'
+            } else {
+                msg3.innerHTML = ''
+            }
+
+            if (Math.abs(posX - corrXPos) > 1 ) {
+                posX = (corrXPos + [[.startX]]) % [[.maxX]]
+                canvas.style.left = posX + 'px'
+            }
+
+            msg2.innerHTML = '<tt>time ' + currTime + '-' + data.time + '=' + (delta) + ' ('+ deltaSec +')'
+                + '<br />pos ' + (posX - [[.startX]]) + '-' + corrXPos + '=' + ((posX - [[.startX]])-corrXPos) + ' (' + deltaPos + ')'
+            + '<br />vid ' + video.currentTime + '-' + corrVideoPos + '=' + (video.currentTime-corrVideoPos)
+            + '</tt>'
+        }
+    }
+
+    }
+</script>
+</body>
+</html>

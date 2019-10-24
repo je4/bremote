@@ -217,8 +217,8 @@ func (ps *ProxySession) ServeGRPC(listener net.Listener) error {
 		// check for session
 		sess, err := ps.proxy.GetSession(targetInstance)
 		if err != nil {
-			ps.log.Errorf("[%v] instance not found in call to %v::%v -> %v%v", traceId, sourceInstance, targetInstance, fullMethodName)
-			return nil, nil, status.Errorf(codes.Unavailable, "[%v] instance not found in call to %v::%v -> %v%v", traceId, sourceInstance, targetInstance, fullMethodName)
+			ps.log.Errorf("[%v] instance not found in call to %v::%v -> %v", traceId, sourceInstance, targetInstance, fullMethodName)
+			return nil, nil, status.Errorf(codes.Unavailable, "[%v] instance not found in call to %v::%v -> %v", traceId, sourceInstance, targetInstance, fullMethodName)
 		}
 
 		// make sure, that we transfer the metadata to the target client
@@ -301,10 +301,17 @@ func (ps *ProxySession) GetProxy() *Proxy {
 }
 
 func (ps *ProxySession) Close() error {
-	_, err := ps.proxy.RemoveSession(ps.instance)
-	if err != nil {
-		return emperror.Wrapf(err, "cannot remove session %v", ps.instance)
+	if ps.proxy != nil {
+		_, err := ps.proxy.RemoveSession(ps.instance)
+		if err != nil {
+			return emperror.Wrapf(err, "cannot remove session %v", ps.instance)
+		}
 	}
-	ps.grpcServer.GracefulStop()
-	return ps.session.Close()
+	if ps.grpcServer != nil {
+		ps.grpcServer.GracefulStop()
+	}
+	if ps.session != nil {
+		return ps.session.Close()
+	}
+	return nil
 }

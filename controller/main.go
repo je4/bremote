@@ -13,7 +13,6 @@ import (
 	"time"
 )
 
-
 var version string = "0.2"
 var servername = "RemoteScreenController/" + version
 
@@ -97,7 +96,8 @@ func main() {
 					"kiosk":                               true,
 					"disable-session-crashed-bubble":      true,
 					"incognito":                           true,
-					"disable-features":                    "InfiniteSessionRestore,TranslateUI",
+//					"enable-features":                     "PreloadMediaEngagementData,AutoplayIgnoreWebAudio,MediaEngagementBypassAutoplayPolicies",
+					"disable-features":                    "InfiniteSessionRestore,TranslateUI,PreloadMediaEngagementData,AutoplayIgnoreWebAudio,MediaEngagementBypassAutoplayPolicies",
 					//"no-first-run":                        true,
 					"enable-fullscreen-toolbar-reveal": false,
 					"useAutomationExtension":           false,

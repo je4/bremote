@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/chromedp/cdproto/input"
 	"github.com/chromedp/cdproto/runtime"
 	"time"
 
@@ -33,6 +34,9 @@ type Browser struct {
 	semScreenshot *semaphore.Weighted
 	browserLog    func(string, ...interface{})
 }
+
+// MouseAction are mouse input event actions
+type MouseAction chromedp.Action
 
 func NewBrowser(execOptions map[string]interface{}, log *logging.Logger, browserLogFunc func(string, ...interface{})) (*Browser, error) {
 	browser := &Browser{
@@ -243,4 +247,67 @@ func (browser *Browser) Close() {
 		os.RemoveAll(browser.TempDir)
 	}
 	browser.TaskCtx = nil
+}
+
+func (browser *Browser) MouseClickXY(x, y int64) error {
+	// screenshot is resource intense. wait until done...
+	browser.semScreenshot.Acquire(context.Background(), 1)
+	browser.log.Debugf("acquire semaphore")
+	defer func() {
+		browser.semScreenshot.Release(1)
+		browser.log.Debugf("release semaphore")
+	}()
+
+	if !browser.IsRunning() {
+		if err := browser.Startup(); err != nil {
+			return emperror.Wrap(err, "cannot re-initialize browser")
+		}
+		if err := browser.Run(); err != nil {
+			return emperror.Wrap(err, "cannot re-start browser")
+		}
+	}
+	// run the task in background and return after task is done or timeoiut
+	c1 := make(chan bool, 1)
+	go func() {
+		browser.log.Debugf("mouseclick started")
+		if err := chromedp.Run(browser.TaskCtx, MouseClickXYAction(float64(x), float64(y))); err != nil {
+			browser.log.Errorf("error running mouseclick: %v", err)
+			c1 <- false
+			return
+		}
+		c1 <- true
+	}()
+	select {
+	case res := <-c1:
+		browser.log.Debugf("mousclick returned: %v", res)
+	case <-time.After(5 * time.Second):
+		browser.log.Debugf("mouseclick timed out")
+	}
+	return nil
+}
+
+// MouseClickXYAction is an action that sends a left mouse button click (ie,
+// mousePressed and mouseReleased event) to the X, Y location.
+func MouseClickXYAction(x, y float64, opts ...chromedp.MouseOption) MouseAction {
+	return chromedp.ActionFunc(func(ctx context.Context) error {
+		p := &input.DispatchMouseEventParams{
+			Type:       input.MousePressed,
+			X:          x,
+			Y:          y,
+			Button:     input.ButtonLeft,
+			ClickCount: 1,
+		}
+
+		// apply opts
+		for _, o := range opts {
+			p = o(p)
+		}
+
+		if err := p.Do(ctx); err != nil {
+			return err
+		}
+
+		p.Type = input.MouseReleased
+		return p.Do(ctx)
+	})
 }

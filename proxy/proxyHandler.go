@@ -215,7 +215,7 @@ func (pss ProxyServiceServer) KVStoreSetValue(ctx context.Context, req *pb.KVSet
 	k := req.GetKey()
 	key := fmt.Sprintf("%s-%s", k.GetClient(), k.GetKey())
 
-	pss.log.Infof("[%v] %v -> /KVStoreSetValue(%s) -> %v", traceId, sourceInstance, key)
+	pss.log.Infof("[%v] %v -> /KVStoreSetValue(%s)", traceId, sourceInstance, key)
 
 	if err := pss.proxySession.proxy.setVar(key, req.GetValue()); err != nil {
 		pss.log.Errorf("cannot set data for %v from key value store: %v", key, err)

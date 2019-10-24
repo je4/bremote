@@ -14,10 +14,58 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 )
 
 func dummy(w http.ResponseWriter, r *http.Request) {
 	return
+}
+
+func (controller *Controller) addRestRoutes(r *mux.Router) {
+
+	// the proxy
+	// ignore error because of static url, which must be correct
+	proxy := &httputil.ReverseProxy{Director: controller.getProxyDirector()}
+	proxy.Transport = &http.Transport{
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			if controller.session == nil {
+				return nil, errors.New("no tls session available")
+			}
+			return controller.session.Open()
+		},
+	}
+
+	r.PathPrefix("/").HandlerFunc(common.MakePreflightHandler(
+		controller.log,
+	)).Methods("OPTIONS")
+
+	r.HandleFunc("/", dummy)
+	r.HandleFunc("/groups", controller.RestGroupList()).Methods("GET")
+	r.HandleFunc("/groups/{group}", controller.RestGroupGetMember()).Methods("GET")
+	r.HandleFunc("/groups/{group}", controller.RestGroupAddInstance()).Methods("PUT")
+	r.HandleFunc("/groups/{group}", controller.RestGroupDelete()).Methods("DELETE")
+	r.HandleFunc("/kvstore", controller.RestKVStoreExport()).Methods("GET")
+	r.HandleFunc("/kvstore", controller.RestKVStoreImport()).Methods("POST", "PUT")
+	r.HandleFunc("/kvstore/{client}", controller.RestKVStoreClientList()).Methods("GET")
+	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValue()).Methods("GET")
+	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValuePut()).Methods("PUT", "POST")
+	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValueDelete()).Methods("DELETE")
+	// get parameter: withstatus
+	r.HandleFunc("/client", controller.RestClientList()).Methods("GET")
+	r.HandleFunc("/client/{client}/status", controller.RestClientStatus()).Methods("GET")
+	r.HandleFunc("/client/{client}/browserlog", controller.RestClientBrowserLog()).Methods("GET")
+	r.HandleFunc("/client/{client}/addr", controller.RestClientHTTPSAddr()).Methods("GET")
+	r.HandleFunc("/client/{client}/navigate", controller.RestClientNavigate()).Methods("POST")
+	r.HandleFunc("/controller", controller.RestControllerList()).Methods("GET")
+	r.HandleFunc("/controller/{controller}/templates", controller.RestControllerTemplates()).Methods("GET")
+	r.PathPrefix("/{target}/").Handler(proxy).Methods("GET", "POST")
+
+	r.Use(func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			controller.log.Infof(r.RequestURI)
+			next.ServeHTTP(w, r)
+		})
+	})
 }
 
 func (controller *Controller) RestLogger() func(next http.Handler) http.Handler {
@@ -52,80 +100,6 @@ func (controller *Controller) getProxyDirector() func(req *http.Request) {
 	}
 
 	return director
-}
-
-func (controller *Controller) addRestRoutes(r *mux.Router) {
-
-	// the proxy
-	// ignore error because of static url, which must be correct
-	proxy := &httputil.ReverseProxy{Director: controller.getProxyDirector()}
-	proxy.Transport = &http.Transport{
-		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			if controller.session == nil {
-				return nil, errors.New("no tls session available")
-			}
-			return controller.session.Open()
-		},
-	}
-
-	r.PathPrefix("/").HandlerFunc(common.MakePreflightHandler(
-		controller.log,
-	)).Methods("OPTIONS")
-
-	r.HandleFunc("/", dummy)
-	r.HandleFunc("/groups", controller.RestGroupList()).Methods("GET")
-	r.HandleFunc("/groups/{group}", controller.RestGroupGetMember()).Methods("GET")
-	r.HandleFunc("/groups/{group}", controller.RestGroupAddInstance()).Methods("PUT")
-	r.HandleFunc("/groups/{group}", controller.RestGroupDelete()).Methods("DELETE")
-	r.HandleFunc("/kvstore", controller.RestKVStoreList())
-	r.HandleFunc("/kvstore/{client}", controller.RestKVStoreClientList())
-	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValue()).Methods("GET")
-	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValuePut()).Methods("PUT", "POST")
-	r.HandleFunc("/kvstore/{client}/{key}", controller.RestKVStoreClientValueDelete()).Methods("DELETE")
-	// get parameter: withstatus
-	r.HandleFunc("/client", controller.RestClientList()).Methods("GET")
-	r.HandleFunc("/client/{client}", controller.RestClientStatus()).Methods("GET")
-	r.HandleFunc("/client/{client}/browserlog", controller.RestClientBrowserLog()).Methods("GET")
-	r.HandleFunc("/client/{client}/addr", controller.RestClientHTTPSAddr()).Methods("GET")
-	r.HandleFunc("/client/{client}/navigate", controller.RestClientNavigate()).Methods("POST")
-	r.HandleFunc("/controller", controller.RestControllerList()).Methods("GET")
-	r.HandleFunc("/controller/{controller}/templates", controller.RestControllerTemplates()).Methods("GET")
-	r.PathPrefix("/{target}/").Handler(proxy)
-
-	r.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			controller.log.Infof(r.RequestURI)
-			next.ServeHTTP(w, r)
-		})
-	})
-
-	/*
-		r.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
-			pathTemplate, err := route.GetPathTemplate()
-			if err == nil {
-				fmt.Println("ROUTE:", pathTemplate)
-			}
-			pathRegexp, err := route.GetPathRegexp()
-			if err == nil {
-				fmt.Println("Path regexp:", pathRegexp)
-			}
-			queriesTemplates, err := route.GetQueriesTemplates()
-			if err == nil {
-				fmt.Println("Queries templates:", strings.Join(queriesTemplates, ","))
-			}
-			queriesRegexps, err := route.GetQueriesRegexp()
-			if err == nil {
-				fmt.Println("Queries regexps:", strings.Join(queriesRegexps, ","))
-			}
-			methods, err := route.GetMethods()
-			if err == nil {
-				fmt.Println("Methods:", strings.Join(methods, ","))
-			}
-			fmt.Println()
-			return nil
-		})
-
-	*/
 }
 
 func (controller *Controller) RestGroupList() func(w http.ResponseWriter, r *http.Request) {
@@ -412,9 +386,9 @@ func (controller *Controller) RestControllerList() func(w http.ResponseWriter, r
 	}
 }
 
-func (controller *Controller) RestKVStoreList() func(w http.ResponseWriter, r *http.Request) {
+func (controller *Controller) RestKVStoreExport() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		controller.log.Info("RestKVStoreList()")
+		controller.log.Info("RestKVStoreExport()")
 
 		pw := pb.NewProxyWrapper(controller.instance, controller.GetSessionPtr())
 		traceId := uniqid.New(uniqid.Params{"traceid_", false})
@@ -431,15 +405,56 @@ func (controller *Controller) RestKVStoreList() func(w http.ResponseWriter, r *h
 			result[key] = d
 		}
 
-		json, err := json.Marshal(controller.kvs)
+		jsonstr, err := json.Marshal(result)
 		if err != nil {
 			controller.log.Errorf("cannot marshal result: %v", err)
 			http.Error(w, fmt.Sprintf("cannot marshal result: %v", err), http.StatusInternalServerError)
 			return
 		}
+		w.Header().Add("Content-Type", "application/jsonstr")
+		w.Header().Add("Server", controller.servername)
+		io.WriteString(w, string(jsonstr))
+	}
+}
+
+func (controller *Controller) RestKVStoreImport() func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		controller.log.Info("RestKVStoreImport()")
+
+		// encode/decode to check for valid json
+		decoder := json.NewDecoder(r.Body)
+		data := map[string]interface{}{}
+		err := decoder.Decode(&data)
+		if err != nil {
+			controller.log.Errorf("cannot decode data: %v", err)
+			http.Error(w, fmt.Sprintf("cannot decode data: %v", err), http.StatusInternalServerError)
+			return
+		}
+		pw := pb.NewProxyWrapper(controller.instance, controller.GetSessionPtr())
+		traceId := uniqid.New(uniqid.Params{"traceid_", false})
+		for key, value := range data {
+			keys := strings.SplitN(key, "-", 2)
+			if len( keys ) != 2 {
+				controller.log.Errorf("key %v has no '-': %v", key, err)
+				http.Error(w, fmt.Sprintf("key %v has no '-': %v", key, err), http.StatusInternalServerError)
+				return
+			}
+			jsonstr, err := json.Marshal(value)
+			if err != nil {
+				controller.log.Errorf("cannot marshal value %v: %v", value, err)
+				http.Error(w, fmt.Sprintf("cannot marshal value %v: %v", value, err), http.StatusInternalServerError)
+				return
+			}
+			if err := pw.KVStoreSetValue(traceId, keys[0], keys[1], string(jsonstr)); err != nil {
+				controller.log.Errorf("cannot set value for key %v: %v", key, err)
+				http.Error(w, fmt.Sprintf("cannot set value for key %v: %v", key, err), http.StatusInternalServerError)
+				return
+			}
+		}
+
 		w.Header().Add("Content-Type", "application/json")
 		w.Header().Add("Server", controller.servername)
-		io.WriteString(w, string(json))
+		io.WriteString(w, `{"status":"ok"}`)
 	}
 }
 

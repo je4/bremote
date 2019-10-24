@@ -30,6 +30,18 @@ message BrowserLog {
 	repeated string entry = 1;
 }
 
+message MouseCoord {
+	int64 x = 1;
+	int64 y = 2;
+}
+
+message ClickMessage {
+	oneof target {
+		string element = 1;
+		MouseCoord coord = 2;
+	}
+}
+
 service ClientService {
 	rpc Ping( String ) returns ( String ) {};
 	rpc StartBrowser( BrowserInitFlags ) returns ( google.protobuf.Empty ) {};
@@ -40,4 +52,5 @@ service ClientService {
 	rpc GetBrowserLog( google.protobuf.Empty ) returns ( BrowserLog ) {};
 	rpc SetStatus( String ) returns ( google.protobuf.Empty ) {};
 	rpc WebsocketMessage( Bytes ) returns (google.protobuf.Empty) {}
+	rpc MouseClick( ClickMessage ) returns ( google.protobuf.Empty ) {};
 }

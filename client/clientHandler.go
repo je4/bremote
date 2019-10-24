@@ -127,6 +127,7 @@ func (css ClientServiceServer) Navigate(ctx context.Context, req *pb.NavigatePar
 
 	tasks := chromedp.Tasks{
 		chromedp.Navigate(req.GetUrl()),
+//		browser.MouseClickXYAction(2,2),
 	}
 	err = b.Tasks(tasks)
 	if err != nil {
@@ -223,4 +224,25 @@ func (css ClientServiceServer) WebsocketMessage(ctx context.Context, req *pb.Byt
 	}
 
 	return &empty.Empty{}, nil
+}
+
+func (css ClientServiceServer) MouseClick(ctx context.Context, param *pb.ClickMessage) (*empty.Empty, error) {
+	traceId, sourceInstance, targetInstance, err := common.RpcContextMetadata(ctx)
+	if err != nil {
+		css.log.Errorf("invalid metadata in call to %v: %v", "MouseClick()", err)
+		return nil, status.Errorf(codes.Unavailable, fmt.Sprintf("invalid metadata in call to %v: %v", "MouseClick()", err))
+	}
+
+	css.log.Infof("[%v] %v -> %v/MouseClick()", traceId, sourceInstance, targetInstance)
+	coord := param.GetCoord()
+	if coord == nil {
+		css.log.Errorf("only coordinates are supported in call to %v", "MouseClick()")
+		return nil, status.Errorf(codes.Unimplemented, fmt.Sprintf("only coordinates are supported in call to %v", "MouseClick()"))
+	}
+	if err := css.client.browser.MouseClickXY(coord.GetX(), coord.GetY()); err != nil {
+		css.log.Errorf("error in call to %v: %v", "MouseClick()", err)
+		return nil, status.Errorf(codes.Internal, fmt.Sprintf("error in call to %v: %v", "MouseClick()", err))
+	}
+
+	return nil, status.Errorf(codes.Unimplemented, "method MouseClick not implemented")
 }

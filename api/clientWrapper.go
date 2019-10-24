@@ -240,3 +240,33 @@ func (cw *ClientWrapper) WebsocketMessage(traceId string, sourceInstance string,
 
 	return nil
 }
+
+func (cw *ClientWrapper) MouseClick(traceId string, sourceInstance string, targetInstance string, x, y int64) error {
+	if traceId == "" {
+		traceId = uniqid.New(uniqid.Params{"traceid_", false})
+	}
+	if err := cw.connect(); err != nil {
+		return emperror.Wrapf(err, "cannot connect to %v", targetInstance)
+	}
+
+	if sourceInstance == "" {
+		sourceInstance = cw.instanceName
+	}
+	ctx := metadata.AppendToOutgoingContext(context.Background(),
+		"sourceInstance", sourceInstance,
+		"targetInstance", targetInstance,
+		"traceId", traceId)
+	_, err := (*cw.clientServiceClient).MouseClick(ctx, &ClickMessage{
+		Target: &ClickMessage_Coord{
+			Coord: &MouseCoord{
+				X: x,
+				Y: y,
+			},
+		},
+	})
+	if err != nil {
+		return emperror.Wrapf(err, "error clicking mouse on %v", targetInstance)
+	}
+
+	return nil
+}

@@ -17,12 +17,14 @@ import (
 	"github.com/sahmad98/go-ringbuffer"
 	"github.com/soheilhy/cmux"
 	"google.golang.org/grpc"
+	"io"
 	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -361,6 +363,32 @@ func (client *BrowserClient) getProxyDirector() func(req *http.Request) {
 	return director
 }
 
+func (client *BrowserClient) browserClick() func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		client.log.Info("browserClick()")
+		xstr := r.FormValue("x")
+		ystr := r.FormValue("y")
+		x, err := strconv.ParseInt(xstr, 10, 64)
+		if err != nil {
+			client.log.Errorf("cannot parse x %v: %v", xstr, err)
+			http.Error(w, fmt.Sprintf("cannot parse x %v: %v", xstr, err), http.StatusBadRequest)
+		}
+		y, err := strconv.ParseInt(ystr, 10, 64)
+		if err != nil {
+			client.log.Errorf("cannot parse x %v: %v", ystr, err)
+			http.Error(w, fmt.Sprintf("cannot parse y %v: %v", ystr, err), http.StatusBadRequest)
+		}
+		if err := client.browser.MouseClickXY(x, y); err != nil {
+			client.log.Errorf("cannot click %v/%v: %v", x, y, err)
+			http.Error(w, fmt.Sprintf("cannot click %v/%v: %v", x, y, err), http.StatusInternalServerError)
+		}
+
+		w.Header().Add("Content-Type", "application/json")
+		io.WriteString(w, `"status":"ok"`)
+	}
+}
+
+
 func (client *BrowserClient) ServeHTTPExt() (err error) {
 	r := mux.NewRouter()
 
@@ -380,6 +408,7 @@ func (client *BrowserClient) ServeHTTPExt() (err error) {
 		},
 	}
 
+	r.Path("/browser/click", ).Queries("x", "{x}", "y", "{y}").HandlerFunc(client.browserClick())
 	// add the websocket echo client
 	r.PathPrefix("/echo/").HandlerFunc(client.wsEcho())
 	r.PathPrefix("/ws/{group}").HandlerFunc(client.websocketGroup())
