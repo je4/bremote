@@ -7,3 +7,4 @@ capem = "C:/daten/go/certs/info_age_ca.pem" # tls root certificate file in PEM f
 tlsaddr = "localhost:7777" # listen address for incoming raw tls connections
 webroot = "C:/daten/go/src/github.com/je4/bremote/proxy/htdocs"
 kvdbfile = "C:/daten/go/src/github.com/je4/bremote/proxy/kv.bitcask"
+ntphost = "localhost"

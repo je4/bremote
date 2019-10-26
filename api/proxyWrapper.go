@@ -339,3 +339,19 @@ func (cw *ProxyWrapper) KVStoreClientList(client string, traceId string) (*map[s
 	}
 	return result, nil
 }
+
+func (cw *ProxyWrapper) NTPRaw(traceId string, data []byte) ([]byte, error) {
+	if traceId == "" {
+		traceId = uniqid.New(uniqid.Params{"traceid_", false})
+	}
+	if err := cw.connect(); err != nil {
+		return nil, emperror.Wrapf(err, "cannot connect")
+	}
+
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "traceid", traceId)
+	ret, err := (*cw.proxyServiceClient).NTPRaw(ctx, &Bytes{Value: data})
+	if err != nil {
+		return nil, emperror.Wrapf(err, "[%v] error querying ntp service", traceId)
+	}
+	return ret.GetValue(), nil
+}

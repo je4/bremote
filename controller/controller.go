@@ -480,7 +480,25 @@ func (controller *Controller) ServeHTTPInt(listener net.Listener) error {
 
 	r.Use(controller.RestLogger())
 
-	controller.httpServerInt = &http.Server{Addr: "localhost:80", Handler: r}
+	headersOk := handlers.AllowedHeaders([]string{"Origin", "X-Requested-With", "Content-Type", "Accept", "Access-Control-Request-Method", "Authorization"})
+	originsOk := handlers.AllowedOrigins([]string{"*"})
+	methodsOk := handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "OPTIONS", "DELETE"})
+	credentialsOk := handlers.AllowCredentials()
+	ignoreOptions := handlers.IgnoreOptions()
+
+	// todo: correct cors handling!!!
+	controller.httpServerInt = &http.Server{
+		Addr: "localhost:80",
+		Handler: handlers.CORS(
+			originsOk,
+			headersOk,
+			methodsOk,
+			credentialsOk,
+			ignoreOptions,
+		)(r),
+	}
+
+	//controller.httpServerInt = &http.Server{Addr: "localhost:80", Handler: r}
 
 	controller.log.Info("launching HTTP server over TLS connection...")
 	// starting http server

@@ -8,6 +8,7 @@ import (
 	"github.com/goph/emperror"
 	"github.com/hashicorp/yamux"
 	"github.com/je4/bremote/common"
+	"github.com/je4/ntp"
 	"github.com/op/go-logging"
 	"github.com/prologic/bitcask"
 	"github.com/soheilhy/cmux"
@@ -37,6 +38,7 @@ type Proxy struct {
 
 	sync.RWMutex
 	listener net.Listener
+	ntpRaw func(data []byte) ([]byte, error)
 }
 
 /*
@@ -58,6 +60,7 @@ func NewProxy(config Config, db *bitcask.Bitcask, log *logging.Logger) (*Proxy, 
 			"proxy":      common.SessionType_Proxy,
 			"controller": common.SessionType_Controller,
 		},
+		ntpRaw:ntp.MakeDefaultHandler(config.NTPHost, "", "", "", 0, 0),
 	}
 	if err := proxy.Init(); err != nil {
 		return nil, emperror.Wrap(err, "cannot connect")

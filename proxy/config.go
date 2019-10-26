@@ -15,6 +15,7 @@ type Config struct {
 	TLSAddr      string
 	WebRoot      string
 	KVDBFile     string
+	NTPHost      string
 }
 
 func LoadConfig(filepath string) Config {

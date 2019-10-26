@@ -66,4 +66,5 @@ service ProxyService {
     rpc KVStoreDeleteValue( KVKeyMessage ) returns (google.protobuf.Empty) {}
     rpc KVStoreList( google.protobuf.Empty ) returns (KVSetValueListMessage) {}
     rpc KVStoreClientList( String ) returns (KVSetValueListMessage) {}
+    rpc NTPRaw( Bytes ) returns ( Bytes ) {}
 }

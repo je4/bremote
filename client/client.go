@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/goph/emperror"
@@ -12,6 +13,7 @@ import (
 	pb "github.com/je4/bremote/api"
 	"github.com/je4/bremote/browser"
 	"github.com/je4/bremote/common"
+	"github.com/je4/ntp"
 	"github.com/mintance/go-uniqid"
 	"github.com/op/go-logging"
 	"github.com/sahmad98/go-ringbuffer"
@@ -30,28 +32,28 @@ import (
 )
 
 type BrowserClient struct {
-	log           *logging.Logger
-	instance      string
-	addr          string
-	httpStatic    string
-	httpTemplates string
-	caFile        string
-	certFile      string
-	keyFile       string
-	httpsCertFile string
-	httpsKeyFile  string
-	httpsAddr     string
-	conn          *tls.Conn
-	session       *yamux.Session
-	grpcServer    *grpc.Server
-	httpServerInt *http.Server
-	httpServerExt *http.Server
-	cmuxServer    *cmux.CMux
-	end           chan bool
-	browser       *browser.Browser
-	status        string
-	wsGroup       map[string]*ClientWebsocket
-	browserLog    *ringbuffer.RingBuffer
+	log            *logging.Logger
+	instance       string
+	addr           string
+	httpStatic     string
+	httpTemplates  string
+	caFile         string
+	certFile       string
+	keyFile        string
+	httpsCertFile  string
+	httpsKeyFile   string
+	httpsAddr      string
+	conn           *tls.Conn
+	session        *yamux.Session
+	grpcServer     *grpc.Server
+	httpServerInt  *http.Server
+	httpServerExt  *http.Server
+	cmuxServer     *cmux.CMux
+	end            chan bool
+	browser        *browser.Browser
+	status         string
+	wsGroup        map[string]*ClientWebsocket
+	browserLog     *ringbuffer.RingBuffer
 }
 
 func NewClient(config Config, log *logging.Logger) *BrowserClient {
@@ -340,6 +342,7 @@ func (client *BrowserClient) ServeGRPC(listener net.Listener) error {
 }
 
 func (client *BrowserClient) getProxyDirector() func(req *http.Request) {
+
 	target, _ := url.Parse("http://localhost:80/")
 	targetQuery := target.RawQuery
 	director := func(req *http.Request) {
@@ -358,9 +361,48 @@ func (client *BrowserClient) getProxyDirector() func(req *http.Request) {
 			req.Header.Set("User-Agent", "")
 		}
 		req.Header.Set("X-Source-Instance", client.GetInstance())
+//		req.Header.Set("Access-Control-Allow-Origin", "*")
 	}
 
 	return director
+}
+
+func (client *BrowserClient) ntpHandlerFunc() func(data []byte) ([]byte, error) {
+	return func(data []byte) ([]byte, error) {
+		pw := pb.NewProxyWrapper(client.instance, client.GetSessionPtr())
+		traceId := uniqid.New(uniqid.Params{"traceid_", false})
+		ret, err := pw.NTPRaw(traceId, data)
+		if err != nil {
+			return nil, emperror.Wrapf(err, "get ntp data from proxy")
+		}
+		return ret, nil
+	}
+}
+
+func (client *BrowserClient) ntp() func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		client.log.Info("ntp()")
+		ret, err := ntp.Query(client.ntpHandlerFunc())
+		if err != nil {
+			client.log.Errorf("cannot query ntp service: %v", err)
+			http.Error(w, fmt.Sprintf("cannot query ntp service: %v", err), http.StatusInternalServerError)
+		}
+		result := struct {
+			Time time.Time
+			ClockOffset int64
+		}{
+			Time: ret.Time.Local(),
+			ClockOffset:int64(ret.ClockOffset / time.Millisecond),
+		}
+		jsonstr, err := json.Marshal(result)
+		if err != nil {
+			client.log.Errorf("cannot marshal result: %v", err)
+			http.Error(w, fmt.Sprintf("cannot marshal result: %v", err), http.StatusInternalServerError)
+		}
+		w.Header().Add("Content-Type", "application/json")
+		io.WriteString(w, string(jsonstr))
+
+	}
 }
 
 func (client *BrowserClient) browserClick() func(w http.ResponseWriter, r *http.Request) {
@@ -388,6 +430,17 @@ func (client *BrowserClient) browserClick() func(w http.ResponseWriter, r *http.
 	}
 }
 
+type MyTransport http.Transport
+
+func (transport *MyTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	// Make the request to the server.
+	resp, err := http.DefaultTransport.RoundTrip(r)
+	if err != nil {
+		return nil, err
+	}
+	resp.Header.Set("Access-Control-Allow-Origin", "*")
+	return resp, nil
+}
 
 func (client *BrowserClient) ServeHTTPExt() (err error) {
 	r := mux.NewRouter()
@@ -406,9 +459,11 @@ func (client *BrowserClient) ServeHTTPExt() (err error) {
 			}
 			return client.session.Open()
 		},
+
 	}
 
-	r.Path("/browser/click", ).Queries("x", "{x}", "y", "{y}").HandlerFunc(client.browserClick())
+	r.PathPrefix("/browser/click").Queries("x", "{x}", "y", "{y}").HandlerFunc(client.browserClick())
+	r.Path	("/ntp").HandlerFunc(client.ntp()).Methods("GET")
 	// add the websocket echo client
 	r.PathPrefix("/echo/").HandlerFunc(client.wsEcho())
 	r.PathPrefix("/ws/{group}").HandlerFunc(client.websocketGroup())
@@ -425,32 +480,6 @@ func (client *BrowserClient) ServeHTTPExt() (err error) {
 		})
 	})
 
-	/*
-		err := r.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
-			pathTemplate, err := route.GetPathTemplate()
-			if err == nil {
-				fmt.Println("ROUTE:", pathTemplate)
-			}
-			pathRegexp, err := route.GetPathRegexp()
-			if err == nil {
-				fmt.Println("Path regexp:", pathRegexp)
-			}
-			queriesTemplates, err := route.GetQueriesTemplates()
-			if err == nil {
-				fmt.Println("Queries templates:", strings.Join(queriesTemplates, ","))
-			}
-			queriesRegexps, err := route.GetQueriesRegexp()
-			if err == nil {
-				fmt.Println("Queries regexps:", strings.Join(queriesRegexps, ","))
-			}
-			methods, err := route.GetMethods()
-			if err == nil {
-				fmt.Println("Methods:", strings.Join(methods, ","))
-			}
-			fmt.Println()
-			return nil
-		})
-	*/
 	client.httpServerExt = &http.Server{Addr: client.httpsAddr, Handler: r}
 
 	client.log.Infof("launching external HTTPS on %s", client.httpsAddr)
@@ -467,6 +496,12 @@ func (client *BrowserClient) screenshot(width int, height int, sigma float64) fu
 	return func(w http.ResponseWriter, r *http.Request) {
 		client.log.Info("screenshot()")
 
+		if client.browser == nil {
+			client.log.Errorf("cannot create screenshot: no browser")
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(fmt.Sprintf("cannot create screenshot: no browser")))
+			return
+		}
 		buf, mime, err := client.browser.Screenshot(width, height, sigma)
 		if err != nil {
 			client.log.Errorf("cannot create screenshot: %v", err)

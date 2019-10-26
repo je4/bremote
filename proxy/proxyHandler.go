@@ -338,3 +338,19 @@ func (pss ProxyServiceServer) KVStoreClientList(ctx context.Context, req *pb.Str
 	}
 	return result, nil
 }
+
+func (pss ProxyServiceServer) NTPRaw(ctx context.Context, req *pb.Bytes) (*pb.Bytes, error) {
+	traceId, sourceInstance, err := common.RpcContextMetadata2(ctx)
+	if err != nil {
+		pss.log.Errorf("invalid metadata in call to %v: %v", "NTPRaw()", err)
+		return nil, status.Errorf(codes.Unavailable, fmt.Sprintf("invalid metadata in call to %v: %v", "NTPRaw()", err))
+	}
+
+	pss.log.Infof("[%v] %v -> /NTPRaw() -> %v", traceId, sourceInstance)
+	result, err := pss.proxySession.proxy.ntpRaw(req.GetValue())
+	if err != nil {
+		pss.log.Errorf("error querying ntp server: %v", err)
+		return nil, status.Errorf(codes.Unavailable, fmt.Sprintf("error querying ntp server: %v", err))
+	}
+	return &pb.Bytes{Value: result}, nil
+}

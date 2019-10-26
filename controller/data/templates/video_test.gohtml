@@ -12,6 +12,7 @@
         }
         #canvas {
             position: absolute;
+            top: 200px;
             left: 0;
             right: 0;
             transform: rotate(20deg);
@@ -65,6 +66,12 @@
         }
 
     }
+
+    let ntp = {
+        Time: Date.now(),
+        ClockOffset: 0
+    }
+
     let canvas = document.getElementById('canvas');
     let video = document.getElementById('mainVideo');
     let msg = document.getElementById('msg');
@@ -74,7 +81,7 @@
     video.addEventListener('loadedmetadata', function() {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
-//        setMaxSize(canvas, video.videoWidth, video.videoHeight)
+        //        setMaxSize(canvas, video.videoWidth, video.videoHeight)
     });
     video.addEventListener('canplay', (event) => {
         playVideo()
@@ -90,66 +97,82 @@
     }, 0);
 
     let posX = [[.startX]]
+    let rotation = 0;
     let posXVideoTime = 0
-    const increment = 3
-    const posFrames = 3
+    const increment = 10
+    const rotationIncrement = 1
+    const posFrames = 2
     const maxX = [[.maxX]];
     (function move() {
         posX = (posX+increment) % [[.maxX]]
         posXVideoTime = video.currentTime
         canvas.style.left = posX + 'px'
-        msg.innerText = Date.now() + ' : ' + (posX - [[.startX]]) + ' : ' + video.currentTime
+
+        rotation = (rotation + rotationIncrement) % 360
+        canvas.style.transform = 'rotate('+ rotation +'deg)';
+
+        msg.innerText = (Date.now()) + '['+ntp.ClockOffset+'] : ' + (posX - [[.startX]]) + ' : ' + video.currentTime
         setTimeout( move, posFrames*1000 / [[.fps]]) // refresh every 3rd frame
     })()
 
     // do the synchronization stuff
     var socket = new WebSocket('[[.wsAddr]]/video_test');
     socket.onopen = function () {
-        if ( [[.syncMaster]] ) {
+        if ([[.syncMaster]])
+        {
             (function sync() {
-                const now = Date.now()
+                const now = (Date.now()+ntp.ClockOffset)
                 const currTime = video.currentTime
                 socket.send(JSON.stringify({
-                    time:now,
-                    videoPos:currTime,
+                    time: now,
+                    videoPos: currTime,
                     xPos: posX - [[.startX]],
-                }))
-                setTimeout(sync, 100*1000/[[.fps]])  // sync every 300 frames
+                rotation: rotation,
+            }))
+                setTimeout(sync, 100 * 1000 / [[.fps]])  // sync every 300 frames
             })();
-    }
+        }
+        socket.onmessage = function (evt) {
+            if (![[.syncMaster]])
+            {
+                const currTime = (Date.now()+ntp.ClockOffset)
+                let data = JSON.parse(evt.data)
+                const delta = currTime - data.time
+                const deltaSec = delta / 1000
+                const deltaPos = deltaSec / (posFrames / [[.fps]])
+                const corrVideoPos = data.videoPos + deltaSec
+                const corrXPos = (data.xPos + deltaPos * increment)
+                const corrRotation = (data.rotation + deltaPos * rotationIncrement)
 
+                if (Math.abs(video.currentTime - corrVideoPos) > 0.05) {
+                    video.currentTime = corrVideoPos
+                    msg3.innerHTML = '<tt>seek video from ' + video.currentTime + ' to ' + (corrVideoPos)
+                        + '</tt>'
+                } else {
+                    msg3.innerHTML = ''
+                }
 
-    socket.onmessage = function(evt){
-        if ( ![[.syncMaster]] ) {
-            const currTime = Date.now()
-            let data = JSON.parse(evt.data)
-            const delta = currTime - data.time
-            const deltaSec = delta/1000
-            const deltaPos = deltaSec / (posFrames / [[.fps]])
-            const corrVideoPos = data.videoPos + deltaSec
-            const corrXPos = data.xPos + deltaPos
+                if (Math.abs(posX - corrXPos) > 1) {
+                    posX = (corrXPos + [[.startX]]) % [[.maxX]]
+                    canvas.style.left = posX + 'px'
 
-            if (Math.abs(video.currentTime - corrVideoPos) > 0.05) {
-                video.currentTime = corrVideoPos
-                msg3.innerHTML = '<tt>seek video from ' + video.currentTime + ' to ' + (corrVideoPos)
-                + '</tt>'
-            } else {
-                msg3.innerHTML = ''
+                    rotation = corrRotation % 360
+                    canvas.style.transform = 'rotate(' + rotation + 'deg)';
+                }
+
+                msg2.innerHTML = '<tt>time ' + currTime + '-' + data.time + '=' + (delta) + ' (' + deltaSec + ')'+
+                    '<br />pos ' + (posX - [[.startX]]) +'-' + corrXPos + '=' + ((posX - [[.startX]])-corrXPos ) +' (' + deltaPos + ')' +
+                    '<br />vid ' + video.currentTime + '-' + corrVideoPos + '=' + (video.currentTime - corrVideoPos)  +
+                    '</tt>'
             }
-
-            if (Math.abs(posX - corrXPos) > 1 ) {
-                posX = (corrXPos + [[.startX]]) % [[.maxX]]
-                canvas.style.left = posX + 'px'
-            }
-
-            msg2.innerHTML = '<tt>time ' + currTime + '-' + data.time + '=' + (delta) + ' ('+ deltaSec +')'
-                + '<br />pos ' + (posX - [[.startX]]) + '-' + corrXPos + '=' + ((posX - [[.startX]])-corrXPos) + ' (' + deltaPos + ')'
-            + '<br />vid ' + video.currentTime + '-' + corrVideoPos + '=' + (video.currentTime-corrVideoPos)
-            + '</tt>'
         }
     }
 
+    async function ready() {
+        const tmp = await fetch('/ntp')
+        ntp = await tmp.json()
     }
+        document.addEventListener('DOMContentLoaded', ready, false)
 </script>
 </body>
 </html>
