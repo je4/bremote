@@ -5,8 +5,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/chromedp/cdproto"
+	"github.com/chromedp/cdproto/css"
+	"github.com/chromedp/cdproto/dom"
 	"github.com/chromedp/cdproto/input"
+	"github.com/chromedp/cdproto/log"
 	"github.com/chromedp/cdproto/runtime"
+	"github.com/chromedp/cdproto/target"
+	"reflect"
 	"time"
 
 	//"github.com/chromedp/cdproto/emulation"
@@ -70,6 +76,27 @@ func (browser *Browser) Startup() error {
 				str += fmt.Sprintf("[%s]%s", arg.Type, arg.Value)
 			}
 			browser.browserLog(str)
+		case *target.EventTargetDestroyed:
+		case *cdproto.Message:
+		case *target.EventTargetInfoChanged:
+		case *target.EventTargetCreated:
+		case *runtime.EventExecutionContextDestroyed:
+		case *runtime.EventExecutionContextsCleared:
+		case *runtime.EventExecutionContextCreated:
+		case *dom.EventDocumentUpdated:
+		case *dom.EventChildNodeInserted:
+		case *dom.EventChildNodeCountUpdated:
+		case *css.EventStyleSheetAdded:
+		case *css.EventMediaQueryResultChanged:
+		case *css.EventStyleSheetRemoved:
+		case *page.EventFrameStoppedLoading:
+		case *page.EventLoadEventFired:
+		case *page.EventDomContentEventFired:
+		case *page.EventFrameNavigated:
+		case *page.EventFrameStartedLoading:
+		case *log.EventEntryAdded:
+		default:
+			browser.browserLog(fmt.Sprintf("Event of type %v happened", reflect.TypeOf(ev)))
 		}
 	})
 	return nil

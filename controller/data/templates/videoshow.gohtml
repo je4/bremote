@@ -1,0 +1,155 @@
+<html>
+<head>
+    <title>
+        Impressions from HGK Archive
+    </title>
+    <style>
+        html, body {
+            height: 100%;
+            width: 100%;
+            margin: 0px;
+            padding: 0px;
+            background-color: black;
+            overflow: hidden;
+            cursor: none;
+
+        }
+        #heading_w {
+            position: fixed;
+            bottom: 5px;
+            right: 5px;
+            color: white;
+            font-size: 36px;
+            font-family: "arial";
+        }
+        #heading_b {
+            position: fixed;
+            bottom: 2px;
+            right: 2px;
+            color: black;
+            font-size: 36px;
+            font-family: "arial";
+        }
+
+        #theVideo {
+            position: fixed;
+            top: 0px;
+            bottom: 0px;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+    <script>
+
+        function parse(x, base) {
+            const parsed = parseInt(x, base);
+            if (isNaN(parsed)) { return 0 }
+            return parsed;
+        }
+        var videoList = [
+            [[range $val := .videos]]"[[$val.masterurl]]",
+            [[end]]
+        ]
+
+        var titleList = [
+            [[range $val := .videos]]"[[$val.title]]",
+            [[end]]
+        ]
+
+        var startList = [
+            [[range $val := .videos]]parse("[[$val.start]]"),
+            [[end]]
+        ]
+
+        const title = "[[.title]]"
+        const maxLen = [[.maxLen]]000
+
+        var video
+        var count = 0;
+        var timePos = -1
+        var startTime = 0
+        var videoStart = 0
+
+        // if video is not playing, go to the next one
+        function checkPlaying() {
+            if( Date.now() - startTime > maxLen ) {
+                doVideo()
+            }
+            else if( video.currentTime != timePos ) {
+                timePos = video.currentTime
+                setTimeout(checkPlaying, 1000)
+            }
+            else {
+                doVideo()
+            }
+        }
+
+        async function playVideo() {
+            console.log("playVideo()")
+            // click once on the browser to emulate user interaction with the website
+            const response = await fetch('/browser/click?x=10&y=10')
+            const playPromise = video.play();
+            if (playPromise !== null){
+                playPromise.catch((e) => {
+                    console.error( 'playVideo() - catch', e.message)
+                    alert( 'playVideo() - catch' + e.message)
+                    setTimeout(playVideo, 1000 )
+                })
+            } else {
+                console.error( 'playVideo() - no promise')
+                setTimeout(playVideo, 1000 )
+            }
+        }
+
+        function doVideo() {
+            video.setAttribute("src", videoList[count])
+            let t = titleList[count]
+            if( t == '<no value>' ) {
+                t = title
+            }
+            document.getElementById('heading_w').innerHTML = t
+            document.getElementById('heading_b').innerHTML = t
+
+            videoStart = startList[count]
+
+            count = (count+1) % videoList.length
+            //video.requestFullscreen()
+            timePos = -1
+            startTime = Date.now()
+            setTimeout(checkPlaying, 5000)
+        }
+
+        window.onload = function () {
+            video = document.getElementById('theVideo');
+
+            video.addEventListener('canplay', (event) => {
+                console.log(event)
+                playVideo()
+            });
+            video.addEventListener('ended', (event) => {
+                doVideo()
+            });
+            video.addEventListener('play', function() {
+                var $this = this;
+            }, 0);
+
+            video.addEventListener('loadedmetadata', function() {
+              video.currentTime = videoStart
+            })
+
+            doVideo()
+        }
+    </script>
+</head>
+<body>
+<video id="theVideo" autoplay>
+
+</video>
+<div id="heading_b">
+    [[.title]]
+</div>
+<div id="heading_w">
+    [[.title]]
+</div>
+</body>
+</html>

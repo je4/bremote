@@ -99,6 +99,7 @@ func (css ClientServiceServer) StartBrowser(ctx context.Context, req *pb.Browser
 	}
 	//	lines := bytes.Split(bs, []byte("\n"))
 	css.log.Debugf("DevToolsActivePort:\n%v", string(bs))
+	// wsurl: ws://localhost:[line1][line2]
 
 	css.client.SetStatus(common.ClientStatus_EmptyBrowser)
 	return &empty.Empty{}, nil

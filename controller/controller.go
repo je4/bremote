@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"github.com/bluele/gcache"
 	"github.com/goph/emperror"
-	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/hashicorp/yamux"
 	pb "github.com/je4/bremote/api"
@@ -421,36 +420,14 @@ func (controller *Controller) ServeHTTPExt() (err error) {
 
 	controller.addRestRoutes(r)
 
-	r.Use(func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Do stuff here
-			controller.log.Debugf(r.RequestURI)
-			// Call the next handler, which can be another middleware in the chain, or the final handler.
-			next.ServeHTTP(w, r)
-		})
-	})
-
-	headersOk := handlers.AllowedHeaders([]string{"Origin", "X-Requested-With", "Content-Type", "Accept", "Access-Control-Request-Method", "Authorization"})
-	originsOk := handlers.AllowedOrigins([]string{"*"})
-	methodsOk := handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "OPTIONS", "DELETE"})
-	credentialsOk := handlers.AllowCredentials()
-	ignoreOptions := handlers.IgnoreOptions()
-
-	// todo: correct cors handling!!!
 	controller.httpServerExt = &http.Server{
 		Addr: controller.httpsAddr,
-		Handler: handlers.CORS(
-			originsOk,
-			headersOk,
-			methodsOk,
-			credentialsOk,
-			ignoreOptions,
-		)(r),
+		Handler:r,
 	}
 
 	//controller.httpServerExt = &http.Server{Addr: controller.httpsAddr, Handler: r}
 
-	controller.log.Infof("launching external HTTPS on %s", controller.httpsAddr)
+	controller.log.Infof("launching external HTTPS on https://%s", controller.httpsAddr)
 	err = controller.httpServerExt.ListenAndServeTLS(controller.httpsCertFile, controller.httpsKeyFile)
 	if err != nil {
 		controller.httpServerExt = nil
@@ -463,39 +440,15 @@ func (controller *Controller) ServeHTTPExt() (err error) {
 func (controller *Controller) ServeHTTPInt(listener net.Listener) error {
 	r := mux.NewRouter()
 
-	fs := http.FileServer(http.Dir(controller.httpStatic))
-	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", fs))
+	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir(controller.httpStatic))))
 	r.PathPrefix("/templates/").HandlerFunc(controller.templateHandler())
 
 	controller.addRestRoutes(r)
 
-	r.Use(controller.RestLogger())
-
-	_ = func(handler http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			controller.log.Infof("[%s] %s %s %s\n", controller.GetInstance(), r.RemoteAddr, r.Method, r.URL)
-			handler.ServeHTTP(w, r)
-		})
-	}
-
-	r.Use(controller.RestLogger())
-
-	headersOk := handlers.AllowedHeaders([]string{"Origin", "X-Requested-With", "Content-Type", "Accept", "Access-Control-Request-Method", "Authorization"})
-	originsOk := handlers.AllowedOrigins([]string{"*"})
-	methodsOk := handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "OPTIONS", "DELETE"})
-	credentialsOk := handlers.AllowCredentials()
-	ignoreOptions := handlers.IgnoreOptions()
-
 	// todo: correct cors handling!!!
 	controller.httpServerInt = &http.Server{
 		Addr: "localhost:80",
-		Handler: handlers.CORS(
-			originsOk,
-			headersOk,
-			methodsOk,
-			credentialsOk,
-			ignoreOptions,
-		)(r),
+		Handler:r,
 	}
 
 	//controller.httpServerInt = &http.Server{Addr: "localhost:80", Handler: r}

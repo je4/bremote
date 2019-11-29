@@ -63,9 +63,26 @@ func (controller *Controller) addRestRoutes(r *mux.Router) {
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			controller.log.Infof(r.RequestURI)
+//			w.Header().Set("Access-Control-Allow-Origin", "*")
 			next.ServeHTTP(w, r)
 		})
 	})
+
+/*
+	headersOk := handlers.AllowedHeaders([]string{"Origin", "X-Requested-With", "Content-Type", "Accept", "Access-Control-Request-Method", "Authorization"})
+	originsOk := handlers.AllowedOrigins([]string{"*"})
+	methodsOk := handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "OPTIONS", "DELETE"})
+	credentialsOk := handlers.AllowCredentials()
+//	ignoreOptions := handlers.IgnoreOptions()
+	r.Use(handlers.CORS(
+		originsOk,
+		headersOk,
+		methodsOk,
+		credentialsOk,
+//		ignoreOptions,
+	))
+*/
+
 }
 
 func (controller *Controller) RestLogger() func(next http.Handler) http.Handler {
@@ -434,7 +451,7 @@ func (controller *Controller) RestKVStoreImport() func(w http.ResponseWriter, r 
 		traceId := uniqid.New(uniqid.Params{"traceid_", false})
 		for key, value := range data {
 			keys := strings.SplitN(key, "-", 2)
-			if len( keys ) != 2 {
+			if len(keys) != 2 {
 				controller.log.Errorf("key %v has no '-': %v", key, err)
 				http.Error(w, fmt.Sprintf("key %v has no '-': %v", key, err), http.StatusInternalServerError)
 				return

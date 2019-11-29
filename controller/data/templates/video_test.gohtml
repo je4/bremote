@@ -86,6 +86,9 @@
     video.addEventListener('canplay', (event) => {
         playVideo()
     });
+    video.addEventListener('ended', (event) => {
+        video.load();
+    });
     video.addEventListener('play', function() {
         var $this = this; //cache
         (function loop() {

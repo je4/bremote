@@ -35,7 +35,7 @@ type ProxySession struct {
 	service       *ProxyServiceServer
 	grpcServer    *grpc.Server
 	httpServerInt *http.Server
-	cmuxServer    *cmux.CMux
+	cmuxServer    cmux.CMux
 	session       *yamux.Session
 	generic       bool
 }
@@ -48,6 +48,7 @@ func NewProxySession(instance string, session *yamux.Session, groups []string, s
 		log:         log,
 		sessionType: sessionType,
 		generic:     generic,
+		cmuxServer:  cmux.New(session),
 	}
 	return ps
 }
@@ -56,14 +57,10 @@ func (ps *ProxySession) Serve() error {
 
 	// we want to create different services for HTTP and GRPC (HTTP/2)
 
-	// create a new muxer on yamux listener
-	cs := cmux.New(ps.session)
-	ps.cmuxServer = &cs
-
 	// first get http1
-	httpl := (*ps.cmuxServer).Match(cmux.HTTP1Fast())
+	httpl := ps.cmuxServer.Match(cmux.HTTP1Fast())
 	// the rest should be grpc
-	grpcl := (*ps.cmuxServer).Match(cmux.Any())
+	grpcl := ps.cmuxServer.Match(cmux.Any())
 
 	var wg sync.WaitGroup
 	wg.Add(3)
@@ -193,7 +190,7 @@ func (ps *ProxySession) ServeHTTPInt(listener net.Listener) error {
 }
 
 func (ps *ProxySession) ServeCmux() error {
-	if err := (*ps.cmuxServer).Serve(); err != nil {
+	if err := ps.cmuxServer.Serve(); err != nil {
 		ps.cmuxServer = nil
 		return emperror.Wrap(err, "cmux closed")
 	}

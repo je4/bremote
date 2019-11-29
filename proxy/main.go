@@ -48,7 +48,7 @@ func main() {
 	log, lf := common.CreateLogger(config.InstanceName, config.Logfile, config.Loglevel)
 	defer lf.Close()
 
-	db, err := bitcask.Open(config.KVDBFile, bitcask.WithSync(true))
+	db, err := bitcask.Open(config.KVDBFile, bitcask.WithSync(true), bitcask.WithMaxValueSize(int(1 << 31)))
 	if err != nil {
 		log.Panicf("Error opening key value store \"%s\": %v", config.KVDBFile, err)
 	}

@@ -1,0 +1,167 @@
+<html>
+<head>
+    <title>
+        Impressions from HGK Archive
+    </title>
+    <style>
+        html, body {
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            background-color: black;
+            overflow: hidden;
+            cursor: none;
+        }
+        #heading_w {
+            position: fixed;
+            bottom: 5px;
+            right: 5px;
+            color: white;
+            font-size: 36px;
+            font-family: "arial";
+        }
+        #heading_b {
+            position: fixed;
+            bottom: 2px;
+            right: 2px;
+            color: black;
+            font-size: 36px;
+            font-family: "arial";
+        }
+
+        .slides {
+            position: relative;
+            left: 0px;
+            top: 0px;
+            width: 100%;
+            height: 100%;
+            align-content: center;
+        }
+        .slide {
+            display: none;
+            max-width: 100%;
+            max-height: 100%;
+            height: 100%;
+            //margin-left: auto;
+            //margin-right: auto;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translateY(-50%) translateX(-50%);
+        }
+
+        @keyframes appearanim  {
+            from {
+                opacity: 0;
+            } to {
+                  opacity: 1;
+              }
+        }
+
+        @keyframes zoomin  {
+            from {
+                transform: translateY(-50%) translateX(-50%) scale(1);
+            } to {
+                transform: translateY(-50%) translateX(-50%) scale(1.15);
+              }
+        }
+
+        @keyframes disappear {
+            from {
+                transform: translateY(-50%) translateX(-50%) scale(1.15);
+                opacity: 1;
+            } to {
+                  transform: translateY(-50%) translateX(-50%) scale(1.15);
+                  opacity: 0;
+              }
+        }
+
+        .default-anim {
+//            position: relative;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translateY(-50%) translateX(-50%);
+            animation-name:
+                    appearanim, zoomin;
+            animation-duration:
+                    1.2s, [[.delay]]s;
+            animation-timing-function:
+                    linear, linear;
+        }
+
+        .remove-anim {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translateY(-50%) translateX(-50%) scale(1.15);
+            animation: disappear 1.2s linear;
+        }
+
+        .animate-left {
+            position: relative;
+        }
+
+        @keyframes animateleft {
+            from { left :-500px; opacity:0 } to { left:0; opacity:1 }
+        }
+    </style>
+    <script>
+        const images = [
+        [[range $val := .images]]"[[$val.masterurl]]",
+            [[end]]
+        ];
+
+        if([[.shuffle]]) {
+            for (let i = images.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [images[i], images[j]] = [images[j], images[i]];
+            }
+        }
+
+        let current = 0;
+        let currentElement = 0;
+
+        function loadImage() {
+            var downloadingImage = new Image();
+            downloadingImage.onload = function() {
+                let img = document.getElementById("img"+currentElement)
+                img.src = downloadingImage.src
+                currentElement = (currentElement+1) % 2
+                nextimg = document.getElementById("img"+currentElement)
+                nextimg.setAttribute("class", "slide remove-anim")
+                img.setAttribute("class", "slide default-anim")
+                setTimeout(function () {
+                    nextimg.setAttribute("style", "display:none; transform: translateY(-50%) translateX(-50%) scale(1);")
+                }, 1200)
+                img.setAttribute("style", "display:block;")
+            }
+            downloadingImage.onabort = function () {
+            }
+            downloadingImage.src = images[current]
+            current = (current+1) % images.length
+            setTimeout(loadImage, [[.delay]]000);
+        }
+
+        document.addEventListener("DOMContentLoaded", function(){
+            loadImage()
+        });
+
+        var count = 0;
+
+    </script>
+</head>
+<body>
+<div class="slides">
+    <img id="img0" class="slide default-anim" src="" style="display: none;">
+    <img id="img1" class="slide default-anim" src="" style="display: none;">
+</div>
+
+<div id="heading_b">
+    [[.title]]
+</div>
+<div id="heading_w">
+    [[.title]]
+</div>
+</body>
+</html>

@@ -13,7 +13,7 @@ import (
 //const addr = `localhost:7777`
 
 func main() {
-	configFile := flag.String("cfg", "", "config file location")
+	configFile := flag.String("cfg", "./client.toml", "config file location")
 	logFile := flag.String("logfile", "", "log file location")
 	logLevel := flag.String("loglevel", "DEBUG", "LOGLEVEL: CRITICAL|ERROR|WARNING|NOTICE|INFO|DEBUG")
 	instanceName := flag.String("instance", "", "instance name")
