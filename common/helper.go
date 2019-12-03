@@ -3,6 +3,9 @@ package common
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os/exec"
+	"runtime"
 	"strings"
 
 	//	"github.com/goph/emperror"
@@ -14,6 +17,15 @@ import (
 var _logformat = logging.MustStringFormatter(
 	`%{time:2006-01-02T15:04:05.000} %{module}::%{shortfunc} [%{shortfile}] > %{level:.5s} - %{message}`,
 )
+
+func FileExists(filename string) bool {
+	info, err := os.Stat(filename)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return !info.IsDir()
+}
+
 
 func SingleJoiningSlash(a, b string) string {
 	aslash := strings.HasSuffix(a, "/")
@@ -102,4 +114,23 @@ func RpcContextMetadata(ctx context.Context) (traceId string, sourceInstance str
 	traceId = tr[0]
 
 	return
+}
+
+func Openbrowser(url string) {
+	var err error
+
+	switch runtime.GOOS {
+	case "linux":
+		err = exec.Command("xdg-open", url).Start()
+	case "windows":
+		err = exec.Command("rundll32", "url.dll,FileProtocolHandler", url).Start()
+	case "darwin":
+		err = exec.Command("open", url).Start()
+	default:
+		err = fmt.Errorf("unsupported platform")
+	}
+	if err != nil {
+//		log.Fatal(err)
+	}
+
 }

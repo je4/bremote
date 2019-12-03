@@ -32,6 +32,8 @@ type Config struct {
 	HttpStatic   string
 	TLSAddr      string
 	Templates    TemplatesConfig
+	Passive      bool
+	UI           bool
 }
 
 func LoadConfig(filepath string) Config {

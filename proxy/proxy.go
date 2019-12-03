@@ -55,11 +55,7 @@ func NewProxy(config Config, db *bitcask.Bitcask, log *logging.Logger) (*Proxy, 
 		sessions: make(map[string]*ProxySession),
 		groups:   NewInstanceGroups(),
 		webRoot:  config.WebRoot,
-		typeMap: map[string]common.SessionType{
-			"client":     common.SessionType_Client,
-			"proxy":      common.SessionType_Proxy,
-			"controller": common.SessionType_Controller,
-		},
+		typeMap: common.SessionTypeInt,
 		ntpRaw:ntp.MakeDefaultHandler(config.NTPHost, "", "", "", 0, 0),
 	}
 	if err := proxy.Init(); err != nil {

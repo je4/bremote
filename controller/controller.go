@@ -12,8 +12,10 @@ import (
 	"github.com/hashicorp/yamux"
 	pb "github.com/je4/bremote/api"
 	"github.com/je4/bremote/common"
+	_ "github.com/je4/bremote/controller/statik"
 	"github.com/mintance/go-uniqid"
 	"github.com/op/go-logging"
+	"github.com/rakyll/statik/fs"
 	"github.com/soheilhy/cmux"
 	"google.golang.org/grpc"
 	"io/ioutil"
@@ -58,6 +60,8 @@ type Controller struct {
 	templateDelimRight string
 	templatesInternal  map[string]string
 	servername         string
+	controllerType     common.SessionType
+	ui                 bool
 }
 
 func NewController(config Config, servername string, log *logging.Logger) *Controller {
@@ -80,7 +84,14 @@ func NewController(config Config, servername string, log *logging.Logger) *Contr
 		templateDelimRight: config.Templates.DelimRight,
 		templatesInternal:  make(map[string]string),
 		servername:         servername,
+		ui:                 config.UI,
 	}
+	if config.Passive {
+		controller.controllerType = common.SessionType_PassiveController
+	} else {
+		controller.controllerType = common.SessionType_Controller
+	}
+
 	for _, internal := range config.Templates.Internal {
 		controller.templatesInternal[internal.Name] = internal.File
 	}
@@ -276,7 +287,14 @@ func (controller *Controller) Serve() error {
 				}
 			}()
 		}
+		time.Sleep(time.Second * 1)
+		if controller.ui {
+			common.Openbrowser(fmt.Sprintf("https://%s/static/ui/#/overview", controller.httpsAddr))
+			// start ui only once
+			controller.ui = false
+		}
 		wg.Wait()
+
 		controller.Close()
 		controller.log.Infof("sleeping %v seconds...", waitTime.Seconds())
 		// wait 10 seconds or finish if needed
@@ -296,7 +314,7 @@ func (controller *Controller) InitProxy() error {
 	pw := pb.NewProxyWrapper(controller.instance, &controller.session)
 
 	traceId := uniqid.New(uniqid.Params{"traceid_", false})
-	if err := pw.Init(traceId, controller.instance, common.SessionType_Controller, common.ClientStatus_Empty, controller.httpsAddr); err != nil {
+	if err := pw.Init(traceId, controller.instance, controller.controllerType, common.ClientStatus_Empty, controller.httpsAddr); err != nil {
 		return emperror.Wrap(err, "cannot initialize client")
 	}
 	return nil
@@ -337,6 +355,11 @@ func (controller *Controller) GetControllers() ([]common.ClientInfo, error) {
 	if err != nil {
 		return []common.ClientInfo{}, emperror.Wrap(err, "cannot get clients")
 	}
+	clients2, err := pw.GetClients(traceId, common.SessionType_PassiveController, true)
+	if err != nil {
+		return []common.ClientInfo{}, emperror.Wrap(err, "cannot get clients")
+	}
+	clients = append(clients, clients2...)
 	return clients, nil
 }
 
@@ -413,16 +436,25 @@ func (controller *Controller) templateHandler() func(w http.ResponseWriter, r *h
 }
 
 func (controller *Controller) ServeHTTPExt() (err error) {
+
+	statikFSUI, err := fs.New()
+	if err != nil {
+		return emperror.Wrapf(err, "cannot load statik filesystem")
+	}
+
 	r := mux.NewRouter()
 
-	fs := http.FileServer(http.Dir(controller.httpStatic))
-	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", fs))
+	fs := http.FileServer(statikFSUI)
+	r.PathPrefix("/static/ui/").Handler(http.StripPrefix("/static/ui/", fs))
+
+	fs2 := http.FileServer(http.Dir(controller.httpStatic))
+	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", fs2))
 
 	controller.addRestRoutes(r)
 
 	controller.httpServerExt = &http.Server{
-		Addr: controller.httpsAddr,
-		Handler:r,
+		Addr:    controller.httpsAddr,
+		Handler: r,
 	}
 
 	//controller.httpServerExt = &http.Server{Addr: controller.httpsAddr, Handler: r}
@@ -447,8 +479,8 @@ func (controller *Controller) ServeHTTPInt(listener net.Listener) error {
 
 	// todo: correct cors handling!!!
 	controller.httpServerInt = &http.Server{
-		Addr: "localhost:80",
-		Handler:r,
+		Addr:    "localhost:80",
+		Handler: r,
 	}
 
 	//controller.httpServerInt = &http.Server{Addr: "localhost:80", Handler: r}

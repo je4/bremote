@@ -3,12 +3,14 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"github.com/je4/bremote/api"
 	"github.com/je4/bremote/common"
 	"github.com/mintance/go-uniqid"
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 )
@@ -20,9 +22,24 @@ var servername = "RemoteScreenController/" + version
 //const addr = `localhost:7777`
 
 func main() {
-	configFile := flag.String("cfg", "", "config file location")
+	configFile := flag.String("cfg", "./controller.toml", "config file location")
 
 	flag.Parse()
+
+	var doLocal = false
+	var exPath = ""
+	if !common.FileExists(*configFile) {
+		ex, err := os.Executable()
+		if err != nil {
+			panic(err)
+		}
+		exPath = filepath.Dir(ex)
+		if common.FileExists(filepath.Join(exPath, *configFile)) {
+			doLocal = true
+			*configFile = filepath.Join(exPath, *configFile)
+		}
+	}
+	fmt.Printf("config: %s", *configFile)
 
 	config := LoadConfig(*configFile)
 
@@ -32,6 +49,15 @@ func main() {
 			log.Panic("cannot get hostname")
 		}
 		config.InstanceName = "controller-" + h
+	}
+	if doLocal {
+		config.KeyPEM = filepath.Join(exPath, config.KeyPEM)
+		config.CaPEM = filepath.Join(exPath, config.CaPEM)
+		config.CertPEM = filepath.Join(exPath, config.CertPEM)
+		config.HttpsCertPEM = filepath.Join(exPath, config.HttpsCertPEM)
+		config.HttpsKeyPEM = filepath.Join(exPath, config.HttpsKeyPEM)
+		config.Templates.Folder = filepath.Join(exPath, config.Templates.Folder)
+		config.HttpStatic = filepath.Join(exPath, config.HttpStatic)
 	}
 
 	// create logger instance

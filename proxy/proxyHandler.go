@@ -58,7 +58,9 @@ func (pss ProxyServiceServer) Init(ctx context.Context, param *pb.InitParam) (*e
 	currentType := pss.proxySession.GetSessionType()
 	newType := common.SessionType(sessionType)
 	if currentType != newType {
-		if currentType == common.SessionType_Undefined || pss.proxySession.IsGeneric() {
+		if currentType == common.SessionType_Undefined ||
+			pss.proxySession.IsGeneric() ||
+			(currentType == common.SessionType_Controller && newType == common.SessionType_PassiveController) {
 			pss.proxySession.SetSessionType(newType)
 		} else {
 			pss.log.Errorf("forbidden to change sessionType from %v to %v", currentType, newType)

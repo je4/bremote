@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 )
 
@@ -28,6 +29,27 @@ func main() {
 	httpsAddr := flag.String("httpsaddr", "", "local listen addr for https addr:port")
 
 	flag.Parse()
+
+	var doLocal = false
+	var exPath = ""
+	if !common.FileExists(*configFile) {
+		ex, err := os.Executable()
+		if err != nil {
+			panic(err)
+		}
+		exPath = filepath.Dir(ex)
+		if common.FileExists(filepath.Join(exPath, *configFile)) {
+			doLocal = true
+			*configFile = filepath.Join(exPath, *configFile)
+			*certPem = filepath.Join(exPath, *certPem)
+			*keyPem = filepath.Join(exPath, *keyPem)
+			*caPem = filepath.Join(exPath, *caPem)
+			*httpStatic = filepath.Join(exPath, *httpStatic)
+			*httpTemplates = filepath.Join(exPath, *httpTemplates)
+			*httpsCertPem = filepath.Join(exPath, *httpsCertPem)
+			*httpsKeyPem = filepath.Join(exPath, *httpsKeyPem)
+		}
+	}
 
 	var config Config
 	if *configFile != "" {
@@ -55,6 +77,15 @@ func main() {
 			log.Panic("cannot get hostname")
 		}
 		config.InstanceName = "client-" + h
+	}
+	if doLocal {
+		config.KeyPEM = filepath.Join(exPath, config.KeyPEM)
+		config.CaPEM = filepath.Join(exPath, config.CaPEM)
+		config.CertPEM = filepath.Join(exPath, config.CertPEM)
+		config.HttpsCertPEM = filepath.Join(exPath, config.HttpsCertPEM)
+		config.HttpsKeyPEM = filepath.Join(exPath, config.HttpsKeyPEM)
+		config.HttpTemplates = filepath.Join(exPath, config.HttpTemplates)
+		config.HttpStatic = filepath.Join(exPath, config.HttpStatic)
 	}
 
 	// create logger instance

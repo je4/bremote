@@ -42,8 +42,5 @@ mkcert() {
 #mkdir certs
 cd certs
 
-mkcert "tabea01" "client"
-mkcert "tabea02" "client"
-mkcert "tabea03" "client"
-mkcert "tabea04" "client"
-mkcert "tabea05" "client"
+#mkcert "tabea01" "client"
+mkcert "tabeactrl" "controller"
