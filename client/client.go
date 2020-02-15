@@ -32,28 +32,29 @@ import (
 )
 
 type BrowserClient struct {
-	log            *logging.Logger
-	instance       string
-	addr           string
-	httpStatic     string
-	httpTemplates  string
-	caFile         string
-	certFile       string
-	keyFile        string
-	httpsCertFile  string
-	httpsKeyFile   string
-	httpsAddr      string
-	conn           *tls.Conn
-	session        *yamux.Session
-	grpcServer     *grpc.Server
-	httpServerInt  *http.Server
-	httpServerExt  *http.Server
-	cmuxServer     *cmux.CMux
-	end            chan bool
-	browser        *browser.Browser
-	status         string
-	wsGroup        map[string]*ClientWebsocket
-	browserLog     *ringbuffer.RingBuffer
+	log           *logging.Logger
+	instance      string
+	addr          string
+	httpStatic    string
+	httpTemplates string
+	caFile        string
+	certFile      string
+	keyFile       string
+	httpsCertFile string
+	httpsKeyFile  string
+	httpsAddr     string
+	httpProxy     string
+	conn          *tls.Conn
+	session       *yamux.Session
+	grpcServer    *grpc.Server
+	httpServerInt *http.Server
+	httpServerExt *http.Server
+	cmuxServer    *cmux.CMux
+	end           chan bool
+	browser       *browser.Browser
+	status        string
+	wsGroup       map[string]*ClientWebsocket
+	browserLog    *ringbuffer.RingBuffer
 }
 
 func NewClient(config Config, log *logging.Logger) *BrowserClient {
@@ -68,6 +69,7 @@ func NewClient(config Config, log *logging.Logger) *BrowserClient {
 		httpsCertFile: config.HttpsCertPEM,
 		httpsKeyFile:  config.HttpsKeyPEM,
 		httpsAddr:     config.HttpsAddr,
+		httpProxy: config.HttpProxy,
 		end:           make(chan bool, 1),
 		status:        common.ClientStatus_Empty,
 		wsGroup:       make(map[string]*ClientWebsocket),
@@ -255,7 +257,7 @@ func (client *BrowserClient) Serve() error {
 			// the rest should be grpc
 			grpcl := (*client.cmuxServer).Match(cmux.Any())
 
-			wg.Add(4)
+			wg.Add(5)
 
 			go func() {
 				if err := client.ServeGRPC(grpcl); err != nil {
@@ -275,6 +277,14 @@ func (client *BrowserClient) Serve() error {
 			go func() {
 				if err := client.ServeHTTPExt(); err != nil {
 					client.log.Errorf("error serving external HTTP: %v", err)
+					client.Close()
+				}
+				wg.Done()
+			}()
+
+			go func() {
+				if err := client.ServeHTTPProxy(); err != nil {
+					client.log.Errorf("error serving http proxy: %v", err)
 					client.Close()
 				}
 				wg.Done()
@@ -440,6 +450,22 @@ func (transport *MyTransport) RoundTrip(r *http.Request) (*http.Response, error)
 	}
 	resp.Header.Set("Access-Control-Allow-Origin", "*")
 	return resp, nil
+}
+
+func (client *BrowserClient) ServeHTTPProxy() error {
+	if client.httpProxy == "" {
+		return nil
+	}
+	listener, err := net.Listen("tcp", client.httpProxy)
+	if err != nil {
+		return emperror.Wrapf(err, "cannot dial to %v", client.httpProxy)
+	}
+	fw := common.NewTCPForwarder(&client.session, client.log)
+	client.log.Infof("launching external HTTP proxy on %s", client.httpProxy)
+	if err := fw.Serve(listener); err != nil {
+		return emperror.Wrapf(err, "error listening on %v", client.httpProxy)
+	}
+	return nil;
 }
 
 func (client *BrowserClient) ServeHTTPExt() (err error) {

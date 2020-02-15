@@ -18,7 +18,6 @@ type Config struct {
 	HttpsAddr     string
 	HttpStatic    string
 	HttpTemplates string
-	HttpProxy     string
 }
 
 func LoadConfig(filepath string) Config {

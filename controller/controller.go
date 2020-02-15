@@ -15,7 +15,7 @@ import (
 	_ "github.com/je4/bremote/controller/statik"
 	"github.com/mintance/go-uniqid"
 	"github.com/op/go-logging"
-	"github.com/rakyll/statik/fs"
+	statik "github.com/rakyll/statik/fs"
 	"github.com/soheilhy/cmux"
 	"google.golang.org/grpc"
 	"io/ioutil"
@@ -437,7 +437,7 @@ func (controller *Controller) templateHandler() func(w http.ResponseWriter, r *h
 
 func (controller *Controller) ServeHTTPExt() (err error) {
 
-	statikFSUI, err := fs.New()
+	statikFSUI, err := statik.New()
 	if err != nil {
 		return emperror.Wrapf(err, "cannot load statik filesystem")
 	}

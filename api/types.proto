@@ -26,6 +26,7 @@ enum ProxySessionType {
     Proxy = 3;
     Actor = 4;
     PassiveController = 5;
+    DataProxy = 6;
 }
 
 message ProxyClient {

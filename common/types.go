@@ -10,6 +10,7 @@ const (
 	SessionType_Proxy             SessionType = 3
 	SessionType_Actor             SessionType = 4
 	SessionType_PassiveController SessionType = 5
+	SessionType_DataProxy         SessionType = 6
 )
 
 var SessionTypeInt = map[string]SessionType{
@@ -20,6 +21,7 @@ var SessionTypeInt = map[string]SessionType{
 	"controller":        SessionType_Controller,
 	"actor":             SessionType_Actor,
 	"passivecontroller": SessionType_PassiveController,
+	"dataproxy":         SessionType_DataProxy,
 }
 
 var SessionTypeString = map[SessionType]string{
@@ -30,6 +32,7 @@ var SessionTypeString = map[SessionType]string{
 	SessionType_Proxy:             "proxy",
 	SessionType_Actor:             "actor",
 	SessionType_PassiveController: "passivecontroller",
+	SessionType_DataProxy:         "dataproxy",
 }
 
 const (

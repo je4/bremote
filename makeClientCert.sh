@@ -58,6 +58,7 @@ mkcert "master" "any"
 mkcert "proxy" "proxy"
 mkcert "controller01" "controller"
 mkcert "controller02" "controller"
+mkcert "memobase" "dataproxy"
 
 declare -a machines=()
 
@@ -67,6 +68,8 @@ do
   machine=ba14nc21${num}
   machines+=($machine)
 done
+
+
 
 for machine in "${machines[@]}"
 do

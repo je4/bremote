@@ -38,6 +38,7 @@ type ProxySession struct {
 	cmuxServer    cmux.CMux
 	session       *yamux.Session
 	generic       bool
+	tcpForwarder  *common.TCPForwarder
 }
 
 func NewProxySession(instance string, session *yamux.Session, groups []string, sessionType common.SessionType, generic bool, proxy *Proxy, log *logging.Logger) *ProxySession {
@@ -57,13 +58,29 @@ func (ps *ProxySession) Serve() error {
 
 	// we want to create different services for HTTP and GRPC (HTTP/2)
 
+	// Java gRPC Clients: Java gRPC client blocks until it receives a SETTINGS frame from the server.
+	// If you are using the Java client to connect to a cmux'ed gRPC server please match with writers
+//	grpcl := ps.cmuxServer.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
+	grpcl := ps.cmuxServer.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
+	//	httpl := ps.cmuxServer.Match(cmux.Any())
+	httpl := ps.cmuxServer.Match(cmux.HTTP1())
+//	http2l := ps.cmuxServer.Match(cmux.HTTP2())
+	datal := ps.cmuxServer.Match(cmux.Any())
+
 	// first get http1
-	httpl := ps.cmuxServer.Match(cmux.HTTP1Fast())
+	//httpl := ps.cmuxServer.Match(cmux.HTTP1Fast())
+
 	// the rest should be grpc
-	grpcl := ps.cmuxServer.Match(cmux.Any())
+	//grpcl := ps.cmuxServer.Match(cmux.Any())
 
 	var wg sync.WaitGroup
-	wg.Add(3)
+	wg.Add(4)
+	go func() {
+		if err := ps.ServeDataInt(datal); err != nil {
+			ps.log.Errorf("error serving DataProxy for instance %v: %v", ps.GetInstance(), err)
+		}
+		wg.Done()
+	}()
 	go func() {
 		if err := ps.ServeGRPC(grpcl); err != nil {
 			ps.log.Errorf("error serving GRPC for instance %v: %v", ps.GetInstance(), err)
@@ -77,6 +94,14 @@ func (ps *ProxySession) Serve() error {
 		wg.Done()
 	}()
 
+	/*
+	go func() {
+		if err := ps.ServeHTTPInt(http2l); err != nil {
+			ps.log.Errorf("error serving http2 for instance %v: %v", ps.GetInstance(), err)
+		}
+		wg.Done()
+	}()
+	*/
 	go func() {
 		if err := ps.ServeCmux(); err != nil {
 			ps.log.Errorf("error serving for instance %v: %v", ps.GetInstance(), err)
@@ -146,6 +171,16 @@ func (ps *ProxySession) ProxyDirector() func(req *http.Request) {
 		ps.log.Debugf("%v -> %v", ps.GetInstance(), req.URL.String())
 	}
 	return director
+}
+
+func (ps *ProxySession) ServeDataInt(listener net.Listener) error {
+	ps.tcpForwarder = common.NewTCPForwarder( &ps.session, ps.log)
+	ps.proxy.log.Info("launching TCP forwarder over TLS connection...")
+	if err := ps.tcpForwarder.Serve(listener); err != nil {
+		ps.tcpForwarder = nil
+		return emperror.Wrapf(err, "failed to serve")
+	}
+	return nil
 }
 
 func (ps *ProxySession) ServeHTTPInt(listener net.Listener) error {
@@ -258,6 +293,10 @@ func (ps *ProxySession) ServeGRPC(listener net.Listener) error {
 	}
 
 	return nil
+}
+
+func (ps *ProxySession) GetType() common.SessionType {
+	return ps.sessionType
 }
 
 func (ps *ProxySession) GetService() *ProxyServiceServer {

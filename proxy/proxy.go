@@ -38,7 +38,7 @@ type Proxy struct {
 
 	sync.RWMutex
 	listener net.Listener
-	ntpRaw func(data []byte) ([]byte, error)
+	ntpRaw   func(data []byte) ([]byte, error)
 }
 
 /*
@@ -55,8 +55,8 @@ func NewProxy(config Config, db *bitcask.Bitcask, log *logging.Logger) (*Proxy, 
 		sessions: make(map[string]*ProxySession),
 		groups:   NewInstanceGroups(),
 		webRoot:  config.WebRoot,
-		typeMap: common.SessionTypeInt,
-		ntpRaw:ntp.MakeDefaultHandler(config.NTPHost, "", "", "", 0, 0),
+		typeMap:  common.SessionTypeInt,
+		ntpRaw:   ntp.MakeDefaultHandler(config.NTPHost, "", "", "", 0, 0),
 	}
 	if err := proxy.Init(); err != nil {
 		return nil, emperror.Wrap(err, "cannot connect")
@@ -313,7 +313,9 @@ func (proxy *Proxy) Serve(listener net.Listener) error {
 		}
 
 		proxy.log.Info("launching a gRPC server over incoming TCP connection")
-		go proxy.ServeSession(session, groups, names[0], sessionType)
+		go func() {
+			proxy.ServeSession(session, groups, names[0], sessionType)
+		}()
 	}
 	return nil
 }
