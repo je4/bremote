@@ -282,7 +282,7 @@ func (controller *Controller) Serve() error {
 				time.Sleep(time.Second * 2)
 				if err := controller.InitProxy(); err != nil {
 					controller.log.Errorf("cannot initialize proxy: %+v", err)
-					//controller.Close()
+					//controller.CloseInternal()
 					//wg.Done()
 				}
 			}()

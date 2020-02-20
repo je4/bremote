@@ -9,7 +9,7 @@ import (
 	"github.com/hashicorp/yamux"
 	pb "github.com/je4/bremote/api"
 	"github.com/je4/bremote/common"
-	"github.com/je4/grpc-proxy/proxy"
+	grpcproxy "github.com/je4/grpc-proxy/proxy"
 	"github.com/op/go-logging"
 	"github.com/soheilhy/cmux"
 	"google.golang.org/grpc"
@@ -60,12 +60,13 @@ func (ps *ProxySession) Serve() error {
 
 	// Java gRPC Clients: Java gRPC client blocks until it receives a SETTINGS frame from the server.
 	// If you are using the Java client to connect to a cmux'ed gRPC server please match with writers
-//	grpcl := ps.cmuxServer.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
 	grpcl := ps.cmuxServer.MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
-	//	httpl := ps.cmuxServer.Match(cmux.Any())
-	httpl := ps.cmuxServer.Match(cmux.HTTP1())
+	//grpcL := ps.cmuxServer.Match(cmux.HTTP2HeaderField("content-type", "application/grpc"))
+	proxyL := ps.cmuxServer.Match(cmux.PrefixMatcher("[proxy]"))
+	httpl := ps.cmuxServer.Match(cmux.Any())
+//	httpl := ps.cmuxServer.Match(cmux.HTTP1())
 //	http2l := ps.cmuxServer.Match(cmux.HTTP2())
-	datal := ps.cmuxServer.Match(cmux.Any())
+	//datal := ps.cmuxServer.Match(cmux.Any())
 
 	// first get http1
 	//httpl := ps.cmuxServer.Match(cmux.HTTP1Fast())
@@ -74,19 +75,25 @@ func (ps *ProxySession) Serve() error {
 	//grpcl := ps.cmuxServer.Match(cmux.Any())
 
 	var wg sync.WaitGroup
-	wg.Add(4)
+	/*
+	wg.Add(1)
 	go func() {
 		if err := ps.ServeDataInt(datal); err != nil {
 			ps.log.Errorf("error serving DataProxy for instance %v: %v", ps.GetInstance(), err)
 		}
 		wg.Done()
 	}()
+	*/
+
+	wg.Add(1)
 	go func() {
 		if err := ps.ServeGRPC(grpcl); err != nil {
 			ps.log.Errorf("error serving GRPC for instance %v: %v", ps.GetInstance(), err)
 		}
 		wg.Done()
 	}()
+
+	wg.Add(1)
 	go func() {
 		if err := ps.ServeHTTPInt(httpl); err != nil {
 			ps.log.Errorf("error serving http for instance %v: %v", ps.GetInstance(), err)
@@ -94,14 +101,15 @@ func (ps *ProxySession) Serve() error {
 		wg.Done()
 	}()
 
-	/*
+	wg.Add(1)
 	go func() {
-		if err := ps.ServeHTTPInt(http2l); err != nil {
-			ps.log.Errorf("error serving http2 for instance %v: %v", ps.GetInstance(), err)
+		if err := ps.ServeHTTPProxyInt(proxyL); err != nil {
+			ps.log.Errorf("error serving http proxy for instance %v: %v", ps.GetInstance(), err)
 		}
 		wg.Done()
 	}()
-	*/
+
+	wg.Add(1)
 	go func() {
 		if err := ps.ServeCmux(); err != nil {
 			ps.log.Errorf("error serving for instance %v: %v", ps.GetInstance(), err)
@@ -173,12 +181,21 @@ func (ps *ProxySession) ProxyDirector() func(req *http.Request) {
 	return director
 }
 
-func (ps *ProxySession) ServeDataInt(listener net.Listener) error {
-	ps.tcpForwarder = common.NewTCPForwarder( &ps.session, ps.log)
-	ps.proxy.log.Info("launching TCP forwarder over TLS connection...")
-	if err := ps.tcpForwarder.Serve(listener); err != nil {
-		ps.tcpForwarder = nil
-		return emperror.Wrapf(err, "failed to serve")
+func (ps *ProxySession) ServeHTTPProxyInt( listener net.Listener) error {
+	getConnection := func() (net.Conn, error) {
+		sessions := ps.GetSessions()
+		for _, session := range sessions {
+			if session.GetType() == common.SessionType_DataProxy {
+				return session.session.Open()
+			}
+		}
+		return nil, errors.New("no dataproxy found")
+	}
+
+	fw := common.NewTCPForwarder("[proxy]", int64(len("[proxy]")), getConnection, ps.log)
+	ps.log.Infof("launching external HTTP proxy")
+	if err := fw.Serve(listener); err != nil {
+		return emperror.Wrapf(err, "error launching external HTTP proxy")
 	}
 	return nil
 }
@@ -189,12 +206,12 @@ func (ps *ProxySession) ServeHTTPInt(listener net.Listener) error {
 	// websocket...
 	httpservmux.HandleFunc("/echo/", wsEcho)
 
-	// the proxy
+	// the rp
 	// ignore error because of static url, which must be correct
-	proxy := &httputil.ReverseProxy{Director: ps.ProxyDirector()}
+	rp := &httputil.ReverseProxy{Director: ps.ProxyDirector()}
 
 	r2 := regexp.MustCompile(`^([^:]+):`)
-	proxy.Transport = &http.Transport{
+	rp.Transport = &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
 			matches := r2.FindStringSubmatch(addr)
 			if len(matches) < 2 {
@@ -209,9 +226,28 @@ func (ps *ProxySession) ServeHTTPInt(listener net.Listener) error {
 			return sess.session.Open()
 		},
 	}
-	httpservmux.Handle("/", proxy)
+	httpservmux.Handle("/", rp)
 
-	ps.httpServerInt = &http.Server{Addr: ":80", Handler: httpservmux}
+	//ps.httpServerInt = &http.Server{Addr: ":80", Handler: httpservmux}
+
+	getConnection := func() (net.Conn, error) {
+		sessions := ps.GetSessions()
+		for _, session := range sessions {
+			if session.GetType() == common.SessionType_DataProxy {
+				dest, err := session.session.Open()
+				if err != nil {
+					return nil, emperror.Wrapf(err, "cannot open connection")
+				}
+				return dest, nil
+			}
+		}
+		return nil, errors.New("no dataproxy found")
+	}
+
+	hpfh := NewHTTPProxyForwardHandler(ps.log, getConnection )
+	hpf := common.NewHttpProxyForwarder(hpfh, httpservmux, ps.log)
+
+	ps.httpServerInt = &http.Server{Addr: ":80", Handler: hpf}
 
 	ps.log.Info("launching HTTP server over TLS connection...")
 	// starting http server
@@ -264,7 +300,7 @@ func (ps *ProxySession) ServeGRPC(listener net.Listener) error {
 				}
 				return sess.session.Open()
 			}),
-			grpc.WithCodec(proxy.Codec()),
+			grpc.WithCodec(grpcproxy.Codec()),
 			//			grpc.WithDefaultCallOptions(grpc.ForceCodec(proxy.Codec())),
 		)
 		if err != nil {
@@ -277,8 +313,8 @@ func (ps *ProxySession) ServeGRPC(listener net.Listener) error {
 	}
 
 	// create a gRPC server object
-	ps.grpcServer = grpc.NewServer(grpc.CustomCodec(proxy.Codec()),
-		grpc.UnknownServiceHandler(proxy.TransparentHandler(director)))
+	ps.grpcServer = grpc.NewServer(grpc.CustomCodec(grpcproxy.Codec()),
+		grpc.UnknownServiceHandler(grpcproxy.TransparentHandler(director)))
 
 	ps.service = NewProxyServiceServer(ps, ps.log)
 
@@ -295,8 +331,16 @@ func (ps *ProxySession) ServeGRPC(listener net.Listener) error {
 	return nil
 }
 
+func (ps *ProxySession) GetSessions() map[string]*ProxySession {
+	return ps.proxy.GetSessions(ps.groups)
+}
+
 func (ps *ProxySession) GetType() common.SessionType {
 	return ps.sessionType
+}
+
+func (ps *ProxySession) GetGroups() []string {
+	return ps.groups
 }
 
 func (ps *ProxySession) GetService() *ProxyServiceServer {

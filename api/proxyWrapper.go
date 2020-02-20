@@ -85,6 +85,9 @@ func (cw *ProxyWrapper) Ping(traceId string) (string, error) {
 }
 
 func (cw *ProxyWrapper) Init(traceId string, instance string, sessionType common.SessionType, status string, httpAddr string) error {
+	if cw == nil {
+		return errors.New("cw is nil")
+	}
 	if traceId == "" {
 		traceId = uniqid.New(uniqid.Params{"traceid_", false})
 	}

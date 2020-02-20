@@ -118,11 +118,25 @@ func (proxy *Proxy) AddSession(session *ProxySession, name string) error {
 /*
 get all sessions
 */
-func (proxy *Proxy) GetSessions() map[string]*ProxySession {
+func (proxy *Proxy) GetSessions(groups []string) map[string]*ProxySession {
 	proxy.RLock()
 	defer proxy.RUnlock()
 
-	return proxy.sessions
+	if len(groups) == 0 {
+		return proxy.sessions
+	}
+	result := map[string]*ProxySession{}
+	for name, session := range proxy.sessions {
+		for s1 := range session.GetGroups() {
+			for s2 := range groups {
+				if s1 == s2 {
+					result[name] = session
+					break;
+				}
+			}
+		}
+	}
+	return result
 }
 
 /*
@@ -209,7 +223,7 @@ func (proxy *Proxy) ListenServe() (err error) {
 	if err != nil {
 		return emperror.Wrapf(err, "cannot start tcp listener on %v", proxy.addr)
 	}
-	defer listener.Close()
+	defer listener.CloseInternal()
 	*/
 
 	go func() {

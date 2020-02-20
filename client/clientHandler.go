@@ -79,7 +79,7 @@ func (css ClientServiceServer) StartBrowser(ctx context.Context, req *pb.Browser
 		css.log.Errorf("initialize browser: %v", err)
 		return nil, status.Errorf(codes.Internal, fmt.Sprintf("cannot initialize browser: %v", err))
 	}
-	//defer browser.Close()
+	//defer browser.CloseInternal()
 	if err := css.client.SetBrowser(browser); err != nil {
 		css.log.Errorf("cannot set browser: %v", err)
 		return nil, status.Errorf(codes.Internal, fmt.Sprintf("cannot set browser: %v", err))

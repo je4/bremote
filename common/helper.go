@@ -47,7 +47,7 @@ func CreateLogger(module string, logfile string, loglevel string) (log *logging.
 		if err != nil {
 			log.Errorf("Cannot open logfile %v: %v", logfile, err)
 		}
-		//defer lf.Close()
+		//defer lf.CloseInternal()
 
 	} else {
 		lf = os.Stderr

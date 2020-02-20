@@ -110,7 +110,11 @@ func main() {
 		client.Shutdown()
 	}()
 
-	if err := client.Serve(); err != nil {
+	if err := client.ServeExternal(); err != nil {
+		log.Panicf("error serving %+v", err)
+	}
+
+	if err := client.ServeInternal(); err != nil {
 		log.Panicf("error serving %+v", err)
 	}
 

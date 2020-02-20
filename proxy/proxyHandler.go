@@ -85,7 +85,7 @@ func (pss ProxyServiceServer) Init(ctx context.Context, param *pb.InitParam) (*e
 		time.Sleep(time.Millisecond * 300)
 		var initialize bool = true
 		var err error
-		for name, session := range pss.proxySession.GetProxy().GetSessions() {
+		for name, session := range pss.proxySession.GetSessions() {
 			// don't notify myself
 			if name == client {
 				continue
@@ -118,7 +118,7 @@ func (pss ProxyServiceServer) GetClients(ctx context.Context, req *pb.GetClients
 	clients := new(pb.ProxyClientList)
 	clients.Clients = []*pb.ProxyClient{}
 	withStatus := req.GetWithStatus()
-	for name, session := range pss.proxySession.GetProxy().GetSessions() {
+	for name, session := range pss.proxySession.GetSessions() {
 		// ignore yourself
 		if name == pss.proxySession.GetInstance() {
 			continue

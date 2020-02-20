@@ -7,6 +7,7 @@ import (
 	"github.com/goph/emperror"
 	"github.com/hashicorp/yamux"
 	pb "github.com/je4/bremote/api"
+	"github.com/je4/bremote/common"
 	"github.com/op/go-logging"
 	"github.com/soheilhy/cmux"
 	"google.golang.org/grpc"
@@ -111,7 +112,7 @@ func (dp *DataProxy) Connect() (err error) {
 	return
 }
 
-func (dp *DataProxy) SetWhitelist(whitelist []string)  {
+func (dp *DataProxy) SetWhitelist(whitelist []string) {
 	dp.whitelist = whitelist
 }
 
@@ -136,15 +137,14 @@ func (dp *DataProxy) Serve() error {
 			cs := cmux.New(dp.session)
 			dp.cmuxServer = &cs
 
-
 			grpcl := (*dp.cmuxServer).MatchWithWriters(cmux.HTTP2MatchHeaderFieldSendSettings("content-type", "application/grpc"))
-			//	httpl := ps.cmuxServer.Match(cmux.Any())
-//			httpl := (*dp.cmuxServer).Match(cmux.HTTP1Fast())
-//			http2l := (*dp.cmuxServer).Match(cmux.HTTP2())
-			datal := (*dp.cmuxServer).Match(cmux.Any())
+			proxyL := (*dp.cmuxServer).Match(cmux.PrefixMatcher("[proxy]"))
+			httpl := (*dp.cmuxServer).Match(cmux.Any())
+			//			httpl := (*dp.cmuxServer).Match(cmux.HTTP1Fast())
+			//			http2l := (*dp.cmuxServer).Match(cmux.HTTP2())
+			//			datal := (*dp.cmuxServer).Match(cmux.Any())
 
-			wg.Add(3)
-
+			wg.Add(1)
 			go func() {
 				if err := dp.ServeGRPC(grpcl); err != nil {
 					dp.log.Errorf("error serving GRPC: %v", err)
@@ -152,7 +152,7 @@ func (dp *DataProxy) Serve() error {
 				}
 				wg.Done()
 			}()
-			/*
+			wg.Add(1)
 			go func() {
 				if err := dp.ServeProxyInt(httpl); err != nil {
 					dp.log.Errorf("error serving internal HTTP: %v", err)
@@ -161,21 +161,27 @@ func (dp *DataProxy) Serve() error {
 				wg.Done()
 			}()
 
-			go func() {
-				if err := dp.ServeProxyInt(http2l); err != nil {
-					dp.log.Errorf("error serving internal HTTP: %v", err)
-					dp.Close()
-				}
-				wg.Done()
-			}()
+			/*
+					wg.Add(1)
+				go func() {
+					if err := dp.ServeProxyInt(http2l); err != nil {
+						dp.log.Errorf("error serving internal HTTP: %v", err)
+						dp.CloseInternal()
+					}
+					wg.Done()
+				}()
 			*/
+
+			wg.Add(1)
 			go func() {
-				if err := dp.ServeProxyInt(datal); err != nil {
+				if err := dp.ServeProxyInt(proxyL); err != nil {
 					dp.log.Errorf("error serving internal HTTP: %v", err)
 					dp.Close()
 				}
 				wg.Done()
 			}()
+
+			wg.Add(1)
 			go func() {
 				if err := dp.ServeCmux(); err != nil {
 					dp.log.Errorf("error serving cmux: %v", err)
@@ -209,7 +215,6 @@ func (dp *DataProxy) ServeCmux() error {
 	return nil
 }
 
-
 func (dp *DataProxy) ServeGRPC(listener net.Listener) error {
 	// create a server instance
 	server := NewDataProxyServiceServer(dp, dp.log)
@@ -231,14 +236,24 @@ func (dp *DataProxy) ServeGRPC(listener net.Listener) error {
 func (dp *DataProxy) ServeProxyInt(listener net.Listener) error {
 	proxy := goproxy.NewProxyHttpServer()
 	proxy.Verbose = true
+	//noProxy := &noProxyHandler{}
+
+	//pfw := common.NewHttpProxyForwarder(proxy, noProxy, dp.log)
+
 	dp.log.Info("launching http proxy server over TLS connection...")
-	if err := http.Serve(listener, proxy); err != nil {
+	if http.DefaultTransport != nil {
+		tran, ok := http.DefaultTransport.(*http.Transport)
+		if ok {
+			tran.CloseIdleConnections()
+		}
+	}
+	if err := http.Serve(
+		common.NewPrefixRemoverListener(int64(len("[proxy]")), listener),
+		proxy); err != nil {
 		return emperror.Wrapf(err, "failed to serve http proxy")
 	}
 	return nil
 }
-
-
 
 func (dp *DataProxy) CloseServices() error {
 	if dp.grpcServer != nil {
@@ -262,20 +277,11 @@ func (dp *DataProxy) CloseServices() error {
 	return nil
 }
 
-
 func (dp *DataProxy) Close() error {
 
 	if err := dp.CloseServices(); err != nil {
 		return err
 	}
-
-	// we don't close the browser if connection is closed
-	/*
-		if client.browser != nil {
-			client.browser.Close()
-			client.browser = nil
-		}
-	*/
 
 	return nil
 }

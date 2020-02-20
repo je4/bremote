@@ -55,6 +55,7 @@ type BrowserClient struct {
 	status        string
 	wsGroup       map[string]*ClientWebsocket
 	browserLog    *ringbuffer.RingBuffer
+	fw            *common.TCPForwarder
 }
 
 func NewClient(config Config, log *logging.Logger) *BrowserClient {
@@ -69,11 +70,12 @@ func NewClient(config Config, log *logging.Logger) *BrowserClient {
 		httpsCertFile: config.HttpsCertPEM,
 		httpsKeyFile:  config.HttpsKeyPEM,
 		httpsAddr:     config.HttpsAddr,
-		httpProxy: config.HttpProxy,
+		httpProxy:     config.HttpProxy,
 		end:           make(chan bool, 1),
 		status:        common.ClientStatus_Empty,
 		wsGroup:       make(map[string]*ClientWebsocket),
 		browserLog:    ringbuffer.NewRingBuffer(100),
+		fw:            nil,
 	}
 
 	return client
@@ -231,11 +233,36 @@ func (client *BrowserClient) Connect() (err error) {
 	return
 }
 
-func (client *BrowserClient) Serve() error {
+func (client *BrowserClient) ServeExternal() error {
+	//			wg.Add(1)
+	go func() {
+		if err := client.ServeHTTPExt(); err != nil {
+			client.log.Errorf("error serving external HTTP: %v", err)
+			client.CloseInternal()
+		}
+		//				wg.Done()
+	}()
+
+	//			wg.Add(1)
+	go func() {
+		if err := client.ServeHTTPProxy(); err != nil {
+			client.log.Errorf("error serving http proxy: %v", err)
+			client.CloseInternal()
+		}
+		//				wg.Done()
+	}()
+	return nil
+}
+
+func (client *BrowserClient) ServeInternal() error {
 	waitTime := time.Second
 
 	for {
 		var wg sync.WaitGroup
+
+		if client == nil {
+			return errors.New("client is nil")
+		}
 
 		if err := client.Connect(); err != nil {
 			client.log.Errorf("cannot connect client %v", err)
@@ -257,43 +284,29 @@ func (client *BrowserClient) Serve() error {
 			// the rest should be grpc
 			grpcl := (*client.cmuxServer).Match(cmux.Any())
 
-			wg.Add(5)
-
+			//			wg.Add(1)
 			go func() {
 				if err := client.ServeGRPC(grpcl); err != nil {
 					client.log.Errorf("error serving GRPC: %v", err)
-					client.Close()
+					client.CloseInternal()
 				}
-				wg.Done()
+				//				wg.Done()
 			}()
+			//			wg.Add(1)
 			go func() {
 				if err := client.ServeHTTPInt(httpl); err != nil {
 					client.log.Errorf("error serving internal HTTP: %v", err)
-					client.Close()
+					client.CloseInternal()
 				}
-				wg.Done()
+				//				wg.Done()
 			}()
 
-			go func() {
-				if err := client.ServeHTTPExt(); err != nil {
-					client.log.Errorf("error serving external HTTP: %v", err)
-					client.Close()
-				}
-				wg.Done()
-			}()
 
-			go func() {
-				if err := client.ServeHTTPProxy(); err != nil {
-					client.log.Errorf("error serving http proxy: %v", err)
-					client.Close()
-				}
-				wg.Done()
-			}()
-
+			wg.Add(1)
 			go func() {
 				if err := client.ServeCmux(); err != nil {
 					client.log.Errorf("error serving cmux: %v", err)
-					client.Close()
+					client.CloseInternal()
 				}
 				wg.Done()
 			}()
@@ -301,13 +314,13 @@ func (client *BrowserClient) Serve() error {
 			go func() {
 				time.Sleep(time.Second * 2)
 				if err := client.InitProxy(); err != nil {
-					log.Panicf("cannot initialize proxy: %+v", err)
-					client.CloseServices()
+					client.log.Errorf("cannot initialize proxy: %+v", err)
+					//client.CloseExternal()
 				}
 			}()
 		}
 		wg.Wait()
-		client.CloseServices()
+		client.CloseInternal()
 		client.log.Infof("sleeping %v seconds...", waitTime.Seconds())
 		// wait 10 seconds or finish if needed
 		select {
@@ -316,14 +329,16 @@ func (client *BrowserClient) Serve() error {
 			client.log.Info("shutting down")
 			return nil
 		}
-		//time.Sleep(time.Second*10)
+		//time.Sleep(time.Second*3)
 	}
-	client.Close()
+	client.CloseInternal()
 	return nil
 }
 
 func (client *BrowserClient) InitProxy() error {
-
+	if client == nil {
+		return errors.New("client is nil")
+	}
 	pw := pb.NewProxyWrapper(client.instance, &client.session)
 
 	traceId := uniqid.New(uniqid.Params{"traceid_", false})
@@ -371,7 +386,7 @@ func (client *BrowserClient) getProxyDirector() func(req *http.Request) {
 			req.Header.Set("User-Agent", "")
 		}
 		req.Header.Set("X-Source-Instance", client.GetInstance())
-//		req.Header.Set("Access-Control-Allow-Origin", "*")
+		//		req.Header.Set("Access-Control-Allow-Origin", "*")
 	}
 
 	return director
@@ -398,11 +413,11 @@ func (client *BrowserClient) ntp() func(w http.ResponseWriter, r *http.Request) 
 			http.Error(w, fmt.Sprintf("cannot query ntp service: %v", err), http.StatusInternalServerError)
 		}
 		result := struct {
-			Time time.Time
+			Time        time.Time
 			ClockOffset int64
 		}{
-			Time: ret.Time.Local(),
-			ClockOffset:int64(ret.ClockOffset / time.Millisecond),
+			Time:        ret.Time.Local(),
+			ClockOffset: int64(ret.ClockOffset / time.Millisecond),
 		}
 		jsonstr, err := json.Marshal(result)
 		if err != nil {
@@ -460,12 +475,21 @@ func (client *BrowserClient) ServeHTTPProxy() error {
 	if err != nil {
 		return emperror.Wrapf(err, "cannot dial to %v", client.httpProxy)
 	}
-	fw := common.NewTCPForwarder(&client.session, client.log)
+
+	// static session in client
+	getTargetConn := func() (net.Conn, error) {
+		if client.session == nil {
+			return nil, errors.New("no active session")
+		}
+		return client.session.Open()
+	}
+
+	client.fw = common.NewTCPForwarder("[proxy]", 0, getTargetConn, client.log)
 	client.log.Infof("launching external HTTP proxy on %s", client.httpProxy)
-	if err := fw.Serve(listener); err != nil {
+	if err := client.fw.Serve(listener); err != nil {
 		return emperror.Wrapf(err, "error listening on %v", client.httpProxy)
 	}
-	return nil;
+	return nil
 }
 
 func (client *BrowserClient) ServeHTTPExt() (err error) {
@@ -485,11 +509,10 @@ func (client *BrowserClient) ServeHTTPExt() (err error) {
 			}
 			return client.session.Open()
 		},
-
 	}
 
 	r.PathPrefix("/browser/click").Queries("x", "{x}", "y", "{y}").HandlerFunc(client.browserClick())
-	r.Path	("/ntp").HandlerFunc(client.ntp()).Methods("GET")
+	r.Path("/ntp").HandlerFunc(client.ntp()).Methods("GET")
 	// add the websocket echo client
 	r.PathPrefix("/echo/").HandlerFunc(client.wsEcho())
 	r.PathPrefix("/ws/{group}").HandlerFunc(client.websocketGroup())
@@ -575,22 +598,32 @@ func (client *BrowserClient) ServeCmux() error {
 	return nil
 }
 
-func (client *BrowserClient) CloseServices() error {
+func (client *BrowserClient) _CloseServices() error {
+	client.log.Infof("closing services")
 	if client.grpcServer != nil {
 		client.grpcServer.GracefulStop()
 		client.grpcServer = nil
 	}
 
 	if client.httpServerInt != nil {
-		ctx, _ := context.WithTimeout(context.Background(), 2*time.Second)
-		client.httpServerInt.Shutdown(ctx)
+		ctx, err := context.WithTimeout(context.Background(), 2*time.Second)
+		if err == nil {
+			client.httpServerInt.Shutdown(ctx)
+		}
 		client.httpServerInt = nil
 	}
 
 	if client.httpServerExt != nil {
-		ctx, _ := context.WithTimeout(context.Background(), 2*time.Second)
-		client.httpServerExt.Shutdown(ctx)
+		ctx, err := context.WithTimeout(context.Background(), 2*time.Second)
+		if err == nil {
+			client.httpServerExt.Shutdown(ctx)
+		}
 		client.httpServerExt = nil
+	}
+
+	if client.fw != nil {
+		client.fw.Shutdown()
+		client.fw = nil
 	}
 
 	if client.cmuxServer != nil {
@@ -606,28 +639,44 @@ func (client *BrowserClient) CloseServices() error {
 		client.conn.Close()
 		client.conn = nil
 	}
+	client.log.Infof("services closed")
 	return nil
 }
 
-func (client *BrowserClient) Close() error {
-
-	if err := client.CloseServices(); err != nil {
-		return err
+func (client *BrowserClient) CloseInternal() error {
+	client.log.Infof("closing internal services")
+	if client.grpcServer != nil {
+		client.grpcServer.GracefulStop()
+		client.grpcServer = nil
 	}
 
-	// we don't close the browser if connection is closed
-	/*
-		if client.browser != nil {
-			client.browser.Close()
-			client.browser = nil
+	if client.httpServerInt != nil {
+		ctx, err := context.WithTimeout(context.Background(), 2*time.Second)
+		if err == nil {
+			client.httpServerInt.Shutdown(ctx)
 		}
-	*/
+		client.httpServerInt = nil
+	}
 
+	if client.cmuxServer != nil {
+		client.cmuxServer = nil
+	}
+
+	if client.session != nil {
+		client.session.Close()
+		client.session = nil
+	}
+
+	if client.conn != nil {
+		client.conn.Close()
+		client.conn = nil
+	}
+	client.log.Infof("internal services closed")
 	return nil
 }
 
 func (client *BrowserClient) Shutdown() error {
-	err := client.Close()
+	err := client.CloseInternal()
 	client.end <- true
 	return err
 }
