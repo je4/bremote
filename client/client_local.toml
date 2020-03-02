@@ -5,6 +5,7 @@ instancename = "" # instance name
 proxy = "localhost:7777" # proxy addr:port
 #proxy = "vpn-de2.info-age.net:80" # proxy addr:port
 httpproxy = "localhost:3128"
+runtimeinterval = "0m10s"
 
 certpem = "C:/daten/go/certs/info_age_ba14nc21096.pem" # tls client certificate file in PEM format
 keypem = "C:/daten/go/certs/info_age_ba14nc21096.key" # tls client key file in PEM format

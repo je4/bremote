@@ -27,8 +27,11 @@ func main() {
 	httpsCertPem := flag.String("httpscertpem", "", "tls client certificate file in PEM format")
 	httpsKeyPem := flag.String("httpskeypem", "", "tls client key file in PEM format")
 	httpsAddr := flag.String("httpsaddr", "", "local listen addr for https addr:port")
+	runtimeInterval := flag.Duration("runtimeinterval", 0, "interval for output of runtime information")
 
 	flag.Parse()
+
+
 
 	var doLocal = false
 	var exPath = ""
@@ -48,6 +51,7 @@ func main() {
 			*httpTemplates = filepath.Join(exPath, *httpTemplates)
 			*httpsCertPem = filepath.Join(exPath, *httpsCertPem)
 			*httpsKeyPem = filepath.Join(exPath, *httpsKeyPem)
+			*runtimeInterval = *runtimeInterval
 		}
 	}
 
@@ -92,6 +96,13 @@ func main() {
 	log, lf := common.CreateLogger(config.InstanceName, config.Logfile, config.Loglevel)
 	defer lf.Close()
 
+	rtStat := common.NewRuntimeStats(config.RuntimeInterval.Duration, log )
+	if config.RuntimeInterval.Duration > 0 {
+		go rtStat.Run()
+	}
+
+
+
 	client := NewClient(config, log)
 
 	go func() {
@@ -108,6 +119,11 @@ func main() {
 		// We received an interrupt signal, shut down.
 		log.Infof("shutdown requested")
 		client.Shutdown()
+
+		if config.RuntimeInterval.Duration > 0 {
+			rtStat.Run()
+		}
+
 	}()
 
 	if err := client.ServeExternal(); err != nil {

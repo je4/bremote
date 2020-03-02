@@ -445,7 +445,7 @@ func (client *BrowserClient) browserClick() func(w http.ResponseWriter, r *http.
 			client.log.Errorf("cannot parse x %v: %v", ystr, err)
 			http.Error(w, fmt.Sprintf("cannot parse y %v: %v", ystr, err), http.StatusBadRequest)
 		}
-		if err := client.browser.MouseClickXY(x, y); err != nil {
+		if err := client.browser.MouseClick("", x, y, "", 2*time.Second); err != nil {
 			client.log.Errorf("cannot click %v/%v: %v", x, y, err)
 			http.Error(w, fmt.Sprintf("cannot click %v/%v: %v", x, y, err), http.StatusInternalServerError)
 		}

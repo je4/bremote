@@ -223,6 +223,10 @@ func (ps *ProxySession) ServeHTTPInt(listener net.Listener) error {
 				ps.log.Errorf("invalid target %s from address %s: %v", target, addr, err)
 				return nil, emperror.Wrapf(err, "invalid target %s from address %s", target, addr)
 			}
+			if !common.StringIntersect(sess.GetGroups(), ps.GetGroups()) {
+				ps.log.Errorf("connection from %v to %v not allowed: no common groups", ps.GetInstance(), sess.GetInstance())
+				return nil, errors.New(fmt.Sprintf("connection from %v to %v not allowed: no common groups", ps.GetInstance(), sess.GetInstance()))
+			}
 			return sess.session.Open()
 		},
 	}
@@ -282,29 +286,45 @@ func (ps *ProxySession) ServeGRPC(listener net.Listener) error {
 			return nil, nil, status.Errorf(codes.Unavailable, fmt.Sprintf("invalid metadata: %v", err))
 		}
 
+		sourceSession, err := ps.proxy.GetSession(sourceInstance)
+		if err != nil {
+			ps.log.Errorf("cannot get session %v: %v", sourceInstance, err)
+			return nil, nil, status.Errorf(codes.Unavailable, fmt.Sprintf("cannot get session %v: %v", sourceInstance, err))
+		}
+		targetSession, err := ps.proxy.GetSession(targetInstance)
+		if err != nil {
+			ps.log.Errorf("cannot get session %v: %v", targetInstance, err)
+			return nil, nil, status.Errorf(codes.Unavailable, fmt.Sprintf("cannot get session %v: %v", targetInstance, err))
+		}
+		if !common.StringIntersect(sourceSession.GetGroups(), targetSession.GetGroups()) {
+			ps.log.Errorf("sessions in different groups: message forbidden")
+			return nil, nil, status.Errorf(codes.Unavailable, "sessions in different groups: message forbidden")
+		}
+
 		// check for session
+		/*
 		sess, err := ps.proxy.GetSession(targetInstance)
 		if err != nil {
 			ps.log.Errorf("[%v] instance not found in call to %v::%v -> %v", traceId, sourceInstance, targetInstance, fullMethodName)
 			return nil, nil, status.Errorf(codes.Unavailable, "[%v] instance not found in call to %v::%v -> %v", traceId, sourceInstance, targetInstance, fullMethodName)
 		}
-
+		*/
 		// make sure, that we transfer the metadata to the target client
 		ctx = metadata.AppendToOutgoingContext(ctx, "sourceInstance", sourceInstance, "targetInstance", targetInstance, "traceId", traceId)
 
 		conn, err := grpc.DialContext(ctx, ":7777",
 			grpc.WithInsecure(),
 			grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
-				if sess.session == nil {
+				if targetSession.session == nil {
 					return nil, errors.New(fmt.Sprintf("[%v] session %s closed", traceId, s))
 				}
-				return sess.session.Open()
+				return targetSession.session.Open()
 			}),
 			grpc.WithCodec(grpcproxy.Codec()),
 			//			grpc.WithDefaultCallOptions(grpc.ForceCodec(proxy.Codec())),
 		)
 		if err != nil {
-			return nil, nil, status.Errorf(codes.Internal, "[%v] error dialing %v on session %v for %v", traceId, ":7777", sess.GetInstance(), fullMethodName)
+			return nil, nil, status.Errorf(codes.Internal, "[%v] error dialing %v on session %v for %v", traceId, ":7777", targetSession.GetInstance(), fullMethodName)
 		}
 
 		ps.log.Debugf("[%v] directing %v -> %v%v", traceId, sourceInstance, targetInstance, fullMethodName)

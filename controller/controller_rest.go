@@ -15,6 +15,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strings"
+	"time"
 )
 
 func dummy(w http.ResponseWriter, r *http.Request) {
@@ -63,25 +64,25 @@ func (controller *Controller) addRestRoutes(r *mux.Router) {
 	r.Use(func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			controller.log.Infof(r.RequestURI)
-//			w.Header().Set("Access-Control-Allow-Origin", "*")
+			//			w.Header().Set("Access-Control-Allow-Origin", "*")
 			next.ServeHTTP(w, r)
 		})
 	})
 
-/*
-	headersOk := handlers.AllowedHeaders([]string{"Origin", "X-Requested-With", "Content-Type", "Accept", "Access-Control-Request-Method", "Authorization"})
-	originsOk := handlers.AllowedOrigins([]string{"*"})
-	methodsOk := handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "OPTIONS", "DELETE"})
-	credentialsOk := handlers.AllowCredentials()
-//	ignoreOptions := handlers.IgnoreOptions()
-	r.Use(handlers.CORS(
-		originsOk,
-		headersOk,
-		methodsOk,
-		credentialsOk,
-//		ignoreOptions,
-	))
-*/
+	/*
+	   	headersOk := handlers.AllowedHeaders([]string{"Origin", "X-Requested-With", "Content-Type", "Accept", "Access-Control-Request-Method", "Authorization"})
+	   	originsOk := handlers.AllowedOrigins([]string{"*"})
+	   	methodsOk := handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "OPTIONS", "DELETE"})
+	   	credentialsOk := handlers.AllowCredentials()
+	   //	ignoreOptions := handlers.IgnoreOptions()
+	   	r.Use(handlers.CORS(
+	   		originsOk,
+	   		headersOk,
+	   		methodsOk,
+	   		credentialsOk,
+	   //		ignoreOptions,
+	   	))
+	*/
 
 }
 
@@ -581,35 +582,59 @@ func (controller *Controller) RestKVStoreClientValueDelete() func(w http.Respons
 	}
 }
 
+type controllerClientNavigate struct {
+	Url         string `json:"url"`
+	Nextstatus  string `json:"nextstatus,omitempty"`
+	Waitfor     string `json:"waitfor,omitempty"`
+	Waittimeout string `json:waittimeout,omitempty`
+	PosX        int64  `json:posx,omitempty`
+	PosY        int64  `json:posy,omitempty`
+	Element     string `json:element,omitempty`
+}
+
 func (controller *Controller) RestClientNavigate() func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		vars := mux.Vars(r)
 		client := vars["client"]
 
 		decoder := json.NewDecoder(r.Body)
-		var data interface{}
+		var data controllerClientNavigate
 		err := decoder.Decode(&data)
 		if err != nil {
 			controller.log.Errorf("cannot decode data: %v", err)
 			http.Error(w, fmt.Sprintf("cannot decode data: %v", err), http.StatusInternalServerError)
 			return
 		}
-		params := data.(map[string]interface{})
-		u, err := url.Parse(params["url"].(string))
+		u, err := url.Parse(data.Url)
 		if err != nil {
-			controller.log.Errorf("cannot parse url %v: %v", params["url"].(string), err)
-			http.Error(w, fmt.Sprintf("cannot parse url %v: %v", params["url"].(string), err), http.StatusInternalServerError)
+			controller.log.Errorf("cannot parse url %v: %v", data.Url, err)
+			http.Error(w, fmt.Sprintf("cannot parse url %v: %v", data.Url, err), http.StatusInternalServerError)
 		}
-		nextStatus := params["nextstatus"].(string)
 
-		controller.log.Infof("%v::RestClientNavigate(%v, %v)", client, u.String(), nextStatus)
+		controller.log.Infof("%v::RestClientNavigate(%v, %v)", client, u.String(), data.Nextstatus)
 
 		cw := pb.NewClientWrapper(controller.instance, controller.GetSessionPtr())
 		traceId := uniqid.New(uniqid.Params{"traceid_", false})
-		err = cw.Navigate(traceId, client, u, nextStatus)
+		err = cw.Navigate(traceId, client, u, data.Nextstatus)
 		if err != nil {
 			controller.log.Errorf("cannot navigate to %v: %v", u.String(), err)
 			http.Error(w, fmt.Sprintf("cannot navigate to %v: %v", u.String(), err), http.StatusInternalServerError)
+			return
+		}
+		waittimeout,err := time.ParseDuration(data.Waittimeout)
+		if err != nil {
+			controller.log.Errorf("invalid timeout format %v: %v", data.Waittimeout, err)
+			http.Error(w, fmt.Sprintf("invalid timeout format %v: %v", data.Waittimeout, err), http.StatusInternalServerError)
+			return
+		}
+		if int64(waittimeout) > 0 {
+			if data.Element != "" {
+				if err := cw.Click(traceId, client, data.Waitfor, waittimeout, data.Element); err != nil {
+					controller.log.Errorf("cannot click: %v", err)
+					http.Error(w, fmt.Sprintf("cannot click: %v", err), http.StatusInternalServerError)
+					return
+				}
+			}
 		}
 
 		w.Header().Add("Content-Type", "application/json")

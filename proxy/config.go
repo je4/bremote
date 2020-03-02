@@ -2,20 +2,22 @@ package main
 
 import (
 	"github.com/BurntSushi/toml"
+	"github.com/je4/bremote/common"
 	"log"
 )
 
 type Config struct {
-	Logfile      string
-	Loglevel     string
-	InstanceName string
-	CertPEM      string
-	KeyPEM       string
-	CaPEM        string
-	TLSAddr      string
-	WebRoot      string
-	KVDBFile     string
-	NTPHost      string
+	Logfile         string
+	Loglevel        string
+	InstanceName    string
+	CertPEM         string
+	KeyPEM          string
+	CaPEM           string
+	TLSAddr         string
+	WebRoot         string
+	KVDBFile        string
+	NTPHost         string
+	RuntimeInterval common.Duration
 }
 
 func LoadConfig(filepath string) Config {

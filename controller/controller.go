@@ -274,6 +274,17 @@ func (controller *Controller) Serve() error {
 				if err := controller.ServeCmux(); err != nil {
 					controller.log.Errorf("error serving cmux: %v", err)
 					controller.Close()
+					controller.cmuxServer = nil
+					emperror.ForEachCause(err, func(err error) bool {
+						switch neterr :=  err.(type) {
+						case *net.OpError:
+							if neterr.Err.Error() == "tls: bad certificate" {
+								panic(fmt.Sprintf("cannot start cmux: %v", err));
+							}
+						}
+						return true
+					})
+					//					controller.end <- true
 				}
 				wg.Done()
 			}()
@@ -287,13 +298,15 @@ func (controller *Controller) Serve() error {
 				}
 			}()
 		}
+
+		wg.Wait()
+
 		time.Sleep(time.Second * 1)
 		if controller.ui {
 			common.Openbrowser(fmt.Sprintf("https://%s/static/ui/#/overview", controller.httpsAddr))
 			// start ui only once
 			controller.ui = false
 		}
-		wg.Wait()
 
 		controller.Close()
 		controller.log.Infof("sleeping %v seconds...", waitTime.Seconds())
@@ -310,6 +323,13 @@ func (controller *Controller) Serve() error {
 }
 
 func (controller *Controller) InitProxy() error {
+
+	/*
+	if controller.cmuxServer == nil {
+		return errors.New("cmux server not running")
+	}
+
+	 */
 
 	pw := pb.NewProxyWrapper(controller.instance, &controller.session)
 

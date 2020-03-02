@@ -27,6 +27,17 @@ func FileExists(filename string) bool {
 }
 
 
+func StringIntersect( arr1, arr2 []string ) bool {
+	for _, str1 := range arr1 {
+		for _, str2 := range arr2 {
+			if str1 == str2 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func SingleJoiningSlash(a, b string) string {
 	aslash := strings.HasSuffix(a, "/")
 	bslash := strings.HasPrefix(b, "/")

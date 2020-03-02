@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/url"
 	"reflect"
+	"time"
 )
 
 type ClientWrapper struct {
@@ -88,6 +89,40 @@ func (cw *ClientWrapper) Ping(traceId string, targetInstance string) (string, er
 	return pingResult.GetValue(), nil
 }
 
+func (cw *ClientWrapper) Click(traceId string, targetInstance string, waitFor string, timeout time.Duration, position interface{}) error {
+	if traceId == "" {
+		traceId = uniqid.New(uniqid.Params{"traceid_", false})
+	}
+	if err := cw.connect(); err != nil {
+		return emperror.Wrapf(err, "cannot connect to %v", targetInstance)
+	}
+
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", targetInstance, "traceId", traceId)
+
+	clickMsg := &ClickMessage{
+		Target:      nil,
+		Timeout:     int64(timeout),
+		Waitvisible: waitFor,
+	}
+	switch pos := position.(type) {
+	case string:
+		clickMsg.Target = &ClickMessage_Element{Element: pos}
+	case struct{ x, y int64 }:
+		clickMsg.Target = &ClickMessage_Coord{Coord: &MouseCoord{
+			X: pos.x,
+			Y: pos.y,
+		}}
+	default:
+		return errors.New("invalid position type")
+	}
+
+	_, err := (*cw.clientServiceClient).MouseClick(ctx, clickMsg)
+	if err != nil {
+		return emperror.Wrapf(err, "MouseClick %v on %v failed", position, targetInstance)
+	}
+	return nil
+}
+
 func (cw *ClientWrapper) Navigate(traceId string, targetInstance string, url *url.URL, nextStatus string) error {
 	if traceId == "" {
 		traceId = uniqid.New(uniqid.Params{"traceid_", false})
@@ -98,7 +133,6 @@ func (cw *ClientWrapper) Navigate(traceId string, targetInstance string, url *ur
 
 	ctx := metadata.AppendToOutgoingContext(context.Background(), "sourceInstance", cw.instanceName, "targetInstance", targetInstance, "traceId", traceId)
 	param := &NavigateParam{Url: url.String(), NextStatus: nextStatus}
-
 	_, err := (*cw.clientServiceClient).Navigate(ctx, param)
 	if err != nil {
 		return emperror.Wrap(err, "error navigating client")

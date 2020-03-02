@@ -92,6 +92,11 @@ func main() {
 	log, lf := common.CreateLogger(config.InstanceName, config.Logfile, config.Loglevel)
 	defer lf.Close()
 
+	rtStat := common.NewRuntimeStats(config.RuntimeInterval.Duration, log )
+	if config.RuntimeInterval.Duration > 0 {
+		go rtStat.Run()
+	}
+
 	client := NewDataProxy(config, log)
 
 	go func() {
@@ -108,6 +113,9 @@ func main() {
 		// We received an interrupt signal, shut down.
 		log.Infof("shutdown requested")
 		client.Shutdown()
+		if config.RuntimeInterval.Duration > 0 {
+			rtStat.Shutdown()
+		}
 	}()
 
 	if err := client.Serve(); err != nil {

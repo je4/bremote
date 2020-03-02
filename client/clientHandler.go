@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/status"
 	"io/ioutil"
 	"path/filepath"
+	"time"
 )
 
 type ClientServiceServer struct {
@@ -235,15 +236,19 @@ func (css ClientServiceServer) MouseClick(ctx context.Context, param *pb.ClickMe
 	}
 
 	css.log.Infof("[%v] %v -> %v/MouseClick()", traceId, sourceInstance, targetInstance)
+	var cx, cy int64
 	coord := param.GetCoord()
-	if coord == nil {
-		css.log.Errorf("only coordinates are supported in call to %v", "MouseClick()")
-		return nil, status.Errorf(codes.Unimplemented, fmt.Sprintf("only coordinates are supported in call to %v", "MouseClick()"))
+	if coord != nil {
+		cx = coord.GetX()
+		cy = coord.GetY()
 	}
-	if err := css.client.browser.MouseClickXY(coord.GetX(), coord.GetY()); err != nil {
+	element := param.GetElement()
+	waitVisible := param.GetWaitvisible()
+	timeout := param.GetTimeout()
+	if err := css.client.browser.MouseClick(waitVisible, cx, cy, element, time.Duration(timeout)); err != nil {
 		css.log.Errorf("error in call to %v: %v", "MouseClick()", err)
 		return nil, status.Errorf(codes.Internal, fmt.Sprintf("error in call to %v: %v", "MouseClick()", err))
 	}
 
-	return nil, status.Errorf(codes.Unimplemented, "method MouseClick not implemented")
+	return &empty.Empty{}, nil
 }

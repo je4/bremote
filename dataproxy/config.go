@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/BurntSushi/toml"
+	"github.com/je4/bremote/common"
 	"log"
 )
 
@@ -18,6 +19,7 @@ type Config struct {
 	HttpsAddr     string
 	HttpStatic    string
 	HttpTemplates string
+	RuntimeInterval common.Duration
 }
 
 func LoadConfig(filepath string) Config {

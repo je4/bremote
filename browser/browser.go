@@ -29,16 +29,16 @@ import (
 )
 
 type Browser struct {
-	allocCtx      context.Context
-	allocCancel   context.CancelFunc
-	TaskCtx       context.Context
-	taskCancel    context.CancelFunc
-	browser       *chromedp.Browser
-	TempDir       string
-	opts          []chromedp.ExecAllocatorOption
-	log           *logging.Logger
-	semScreenshot *semaphore.Weighted
-	browserLog    func(string, ...interface{})
+	allocCtx    context.Context
+	allocCancel context.CancelFunc
+	TaskCtx     context.Context
+	taskCancel  context.CancelFunc
+	browser     *chromedp.Browser
+	TempDir     string
+	opts        []chromedp.ExecAllocatorOption
+	log         *logging.Logger
+	semAction   *semaphore.Weighted
+	browserLog  func(string, ...interface{})
 }
 
 // MouseAction are mouse input event actions
@@ -46,15 +46,18 @@ type MouseAction chromedp.Action
 
 func NewBrowser(execOptions map[string]interface{}, log *logging.Logger, browserLogFunc func(string, ...interface{})) (*Browser, error) {
 	browser := &Browser{
-		log:           log,
-		semScreenshot: semaphore.NewWeighted(1),
-		browserLog:    browserLogFunc,
+		log:        log,
+		semAction:  semaphore.NewWeighted(1),
+		browserLog: browserLogFunc,
 	}
 	return browser, browser.Init(execOptions)
 }
 
 func (browser *Browser) getTimeoutCtx(duration time.Duration) context.Context {
-	newCtx, _ := context.WithTimeout(browser.TaskCtx, 10*time.Second)
+	if duration == 0 {
+		duration = 10 * time.Second
+	}
+	newCtx, _ := context.WithTimeout(browser.TaskCtx, duration)
 	return newCtx
 }
 
@@ -151,12 +154,12 @@ func (browser *Browser) Screenshot(width int, height int, sigma float64) ([]byte
 		return nil, "", errors.New("browser not running")
 	}
 	// screenshot is resource intense. disallow parallel use
-	if !browser.semScreenshot.TryAcquire(1) {
+	if !browser.semAction.TryAcquire(1) {
 		return nil, "", errors.New("cannot acquire semaphore")
 	}
 	browser.log.Debugf("acquire semaphore")
 	defer func() {
-		browser.semScreenshot.Release(1)
+		browser.semAction.Release(1)
 		browser.log.Debugf("release semaphore")
 	}()
 
@@ -202,10 +205,10 @@ func (browser *Browser) IsRunning() bool {
 
 func (browser *Browser) Tasks(tasks chromedp.Tasks) error {
 	// screenshot is resource intense. wait until done...
-	browser.semScreenshot.Acquire(context.Background(), 1)
+	browser.semAction.Acquire(context.Background(), 1)
 	browser.log.Debugf("acquire semaphore")
 	defer func() {
-		browser.semScreenshot.Release(1)
+		browser.semAction.Release(1)
 		browser.log.Debugf("release semaphore")
 	}()
 
@@ -276,12 +279,12 @@ func (browser *Browser) Close() {
 	browser.TaskCtx = nil
 }
 
-func (browser *Browser) MouseClickXY(x, y int64) error {
+func (browser *Browser) MouseClick(waitVisible string, x, y int64, element string, timeout time.Duration) error {
 	// screenshot is resource intense. wait until done...
-	browser.semScreenshot.Acquire(context.Background(), 1)
+	browser.semAction.Acquire(context.Background(), 1)
 	browser.log.Debugf("acquire semaphore")
 	defer func() {
-		browser.semScreenshot.Release(1)
+		browser.semAction.Release(1)
 		browser.log.Debugf("release semaphore")
 	}()
 
@@ -297,7 +300,18 @@ func (browser *Browser) MouseClickXY(x, y int64) error {
 	c1 := make(chan bool, 1)
 	go func() {
 		browser.log.Debugf("mouseclick started")
-		if err := chromedp.Run(browser.TaskCtx, MouseClickXYAction(float64(x), float64(y))); err != nil {
+		actions := []chromedp.Action{}
+		if waitVisible != "" {
+			actions = append(actions, chromedp.WaitVisible(waitVisible, chromedp.ByQuery))
+		}
+		if element == "" {
+			actions = append(actions, MouseClickXYAction(float64(x), float64(y)))
+		} else {
+			actions = append(actions, chromedp.Click(element, chromedp.NodeVisible))
+		}
+		ctx, cancel := context.WithTimeout(browser.TaskCtx, timeout)
+		defer cancel()
+		if err := chromedp.Run(ctx, actions...); err != nil {
 			browser.log.Errorf("error running mouseclick: %v", err)
 			c1 <- false
 			return
@@ -337,4 +351,10 @@ func MouseClickXYAction(x, y float64, opts ...chromedp.MouseOption) MouseAction 
 		p.Type = input.MouseReleased
 		return p.Do(ctx)
 	})
+}
+
+// MouseClickXYAction is an action that sends a left mouse button click (ie,
+// mousePressed and mouseReleased event) to the X, Y location.
+func MouseClickElementAction(element string, opts ...chromedp.MouseOption) MouseAction {
+	return chromedp.Click(element, chromedp.NodeVisible)
 }

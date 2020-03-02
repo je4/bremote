@@ -40,6 +40,12 @@ message ClickMessage {
 		string element = 1;
 		MouseCoord coord = 2;
 	}
+	int64 timeout = 3;
+	string waitvisible = 4;
+}
+
+message ClickItemMessage {
+
 }
 
 service ClientService {

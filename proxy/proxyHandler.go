@@ -123,6 +123,10 @@ func (pss ProxyServiceServer) GetClients(ctx context.Context, req *pb.GetClients
 		if name == pss.proxySession.GetInstance() {
 			continue
 		}
+		// return only clients with intersecting groups
+		if !common.StringIntersect(pss.proxySession.GetGroups(), session.GetGroups()) {
+			continue
+		}
 		status := common.ClientStatus_Empty
 		if withStatus {
 			cw := pb.NewClientWrapper(pss.proxySession.GetInstance(), session.GetSessionPtr())

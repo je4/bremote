@@ -10,6 +10,7 @@ keypem = "C:/daten/go/certs/info_age_memobase.key" # tls client key file in PEM 
 capem = "C:/daten/go/certs/info_age_ca.pem" # tls root certificate file in PEM format
 httpscertpem = "C:/daten/go/certs/info_age_localhost.pem" # tls client certificate file in PEM format
 httpskeypem = "C:/daten/go/certs/info_age_localhost.key" # tls client key file in PEM format
+runtimeinterval = "0m10s"
 
 #certpem = "C:/daten/go/certs/bremote_client.pem" # tls client certificate file in PEM format
 #keypem = "C:/daten/go/certs/bremote_client.key" # tls client key file in PEM format
