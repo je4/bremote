@@ -10,7 +10,7 @@ import (
 	"github.com/je4/bremote/common"
 	"github.com/je4/ntp"
 	"github.com/op/go-logging"
-	"github.com/prologic/bitcask"
+	"git.mills.io/prologic/bitcask"
 	"github.com/soheilhy/cmux"
 	"io/ioutil"
 	"net"

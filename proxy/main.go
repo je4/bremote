@@ -3,7 +3,7 @@ package main
 import (
 	"flag"
 	"github.com/je4/bremote/common"
-	"github.com/prologic/bitcask"
+	"git.mills.io/prologic/bitcask"
 	"log"
 	"os"
 	"os/signal"
