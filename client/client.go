@@ -10,10 +10,10 @@ import (
 	"github.com/goph/emperror"
 	"github.com/gorilla/mux"
 	"github.com/hashicorp/yamux"
-	pb "github.com/je4/bremote/api"
-	"github.com/je4/bremote/browser"
-	"github.com/je4/bremote/common"
-	"github.com/je4/ntp"
+	pb "github.com/je4/bremote/v2/api"
+	"github.com/je4/bremote/v2/browser"
+	"github.com/je4/bremote/v2/common"
+	"github.com/je4/ntp/v2"
 	"github.com/mintance/go-uniqid"
 	"github.com/op/go-logging"
 	"github.com/sahmad98/go-ringbuffer"
@@ -88,7 +88,8 @@ func (client *BrowserClient) writeBrowserLog(format string, a ...interface{}) {
 func (client *BrowserClient) getBrowserLog() []string {
 	result := []string{}
 	client.browserLog.Reader = client.browserLog.Writer
-	for i := 0; i < client.browserLog.Size; i++ {
+	var i int32
+	for ; i < client.browserLog.Size; i++ {
 		elem := client.browserLog.Read()
 		str, ok := elem.(string)
 		if !ok {
@@ -300,7 +301,6 @@ func (client *BrowserClient) ServeInternal() error {
 				}
 				//				wg.Done()
 			}()
-
 
 			wg.Add(1)
 			go func() {

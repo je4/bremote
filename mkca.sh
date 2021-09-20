@@ -3,6 +3,7 @@
 # like:
 # ./makecert.sh foo@foo.com
 
+
 if [ "$1" == "" ]; then
     echo "Need email as first argument"
     exit 1

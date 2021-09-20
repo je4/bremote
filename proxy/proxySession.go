@@ -7,8 +7,8 @@ import (
 	"github.com/goph/emperror"
 	"github.com/gorilla/websocket"
 	"github.com/hashicorp/yamux"
-	pb "github.com/je4/bremote/api"
-	"github.com/je4/bremote/common"
+	pb "github.com/je4/bremote/v2/api"
+	"github.com/je4/bremote/v2/common"
 	grpcproxy "github.com/je4/grpc-proxy/proxy"
 	"github.com/op/go-logging"
 	"github.com/soheilhy/cmux"
@@ -64,8 +64,8 @@ func (ps *ProxySession) Serve() error {
 	//grpcL := ps.cmuxServer.Match(cmux.HTTP2HeaderField("content-type", "application/grpc"))
 	proxyL := ps.cmuxServer.Match(cmux.PrefixMatcher("[proxy]"))
 	httpl := ps.cmuxServer.Match(cmux.Any())
-//	httpl := ps.cmuxServer.Match(cmux.HTTP1())
-//	http2l := ps.cmuxServer.Match(cmux.HTTP2())
+	//	httpl := ps.cmuxServer.Match(cmux.HTTP1())
+	//	http2l := ps.cmuxServer.Match(cmux.HTTP2())
 	//datal := ps.cmuxServer.Match(cmux.Any())
 
 	// first get http1
@@ -76,13 +76,13 @@ func (ps *ProxySession) Serve() error {
 
 	var wg sync.WaitGroup
 	/*
-	wg.Add(1)
-	go func() {
-		if err := ps.ServeDataInt(datal); err != nil {
-			ps.log.Errorf("error serving DataProxy for instance %v: %v", ps.GetInstance(), err)
-		}
-		wg.Done()
-	}()
+		wg.Add(1)
+		go func() {
+			if err := ps.ServeDataInt(datal); err != nil {
+				ps.log.Errorf("error serving DataProxy for instance %v: %v", ps.GetInstance(), err)
+			}
+			wg.Done()
+		}()
 	*/
 
 	wg.Add(1)
@@ -181,7 +181,7 @@ func (ps *ProxySession) ProxyDirector() func(req *http.Request) {
 	return director
 }
 
-func (ps *ProxySession) ServeHTTPProxyInt( listener net.Listener) error {
+func (ps *ProxySession) ServeHTTPProxyInt(listener net.Listener) error {
 	getConnection := func() (net.Conn, error) {
 		sessions := ps.GetSessions()
 		for _, session := range sessions {
@@ -248,7 +248,7 @@ func (ps *ProxySession) ServeHTTPInt(listener net.Listener) error {
 		return nil, errors.New("no dataproxy found")
 	}
 
-	hpfh := NewHTTPProxyForwardHandler(ps.log, getConnection )
+	hpfh := NewHTTPProxyForwardHandler(ps.log, getConnection)
 	hpf := common.NewHttpProxyForwarder(hpfh, httpservmux, ps.log)
 
 	ps.httpServerInt = &http.Server{Addr: ":80", Handler: hpf}
@@ -303,11 +303,11 @@ func (ps *ProxySession) ServeGRPC(listener net.Listener) error {
 
 		// check for session
 		/*
-		sess, err := ps.proxy.GetSession(targetInstance)
-		if err != nil {
-			ps.log.Errorf("[%v] instance not found in call to %v::%v -> %v", traceId, sourceInstance, targetInstance, fullMethodName)
-			return nil, nil, status.Errorf(codes.Unavailable, "[%v] instance not found in call to %v::%v -> %v", traceId, sourceInstance, targetInstance, fullMethodName)
-		}
+			sess, err := ps.proxy.GetSession(targetInstance)
+			if err != nil {
+				ps.log.Errorf("[%v] instance not found in call to %v::%v -> %v", traceId, sourceInstance, targetInstance, fullMethodName)
+				return nil, nil, status.Errorf(codes.Unavailable, "[%v] instance not found in call to %v::%v -> %v", traceId, sourceInstance, targetInstance, fullMethodName)
+			}
 		*/
 		// make sure, that we transfer the metadata to the target client
 		ctx = metadata.AppendToOutgoingContext(ctx, "sourceInstance", sourceInstance, "targetInstance", targetInstance, "traceId", traceId)

@@ -10,9 +10,9 @@ import (
 	"github.com/goph/emperror"
 	"github.com/gorilla/mux"
 	"github.com/hashicorp/yamux"
-	pb "github.com/je4/bremote/api"
-	"github.com/je4/bremote/common"
-	_ "github.com/je4/bremote/controller/statik"
+	pb "github.com/je4/bremote/v2/api"
+	"github.com/je4/bremote/v2/common"
+	_ "github.com/je4/bremote/v2/controller/statik"
 	"github.com/mintance/go-uniqid"
 	"github.com/op/go-logging"
 	statik "github.com/rakyll/statik/fs"
@@ -276,10 +276,10 @@ func (controller *Controller) Serve() error {
 					controller.Close()
 					controller.cmuxServer = nil
 					emperror.ForEachCause(err, func(err error) bool {
-						switch neterr :=  err.(type) {
+						switch neterr := err.(type) {
 						case *net.OpError:
 							if neterr.Err.Error() == "tls: bad certificate" {
-								panic(fmt.Sprintf("cannot start cmux: %v", err));
+								panic(fmt.Sprintf("cannot start cmux: %v", err))
 							}
 						}
 						return true
@@ -325,11 +325,11 @@ func (controller *Controller) Serve() error {
 func (controller *Controller) InitProxy() error {
 
 	/*
-	if controller.cmuxServer == nil {
-		return errors.New("cmux server not running")
-	}
+		if controller.cmuxServer == nil {
+			return errors.New("cmux server not running")
+		}
 
-	 */
+	*/
 
 	pw := pb.NewProxyWrapper(controller.instance, &controller.session)
 

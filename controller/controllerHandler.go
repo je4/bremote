@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/golang/protobuf/ptypes/empty"
-	"github.com/je4/bremote/api"
-	pb "github.com/je4/bremote/api"
-	"github.com/je4/bremote/common"
+	"github.com/je4/bremote/v2/api"
+	pb "github.com/je4/bremote/v2/api"
+	"github.com/je4/bremote/v2/common"
 	"github.com/mintance/go-uniqid"
 	"github.com/op/go-logging"
 	"google.golang.org/grpc/codes"
@@ -79,8 +79,8 @@ func (css ControllerServiceServer) NewClient(ctx context.Context, param *pb.NewC
 				"kiosk":                               true,
 				"disable-session-crashed-bubble":      true,
 				"incognito":                           true,
-//				"enable-features":                     "PreloadMediaEngagementData,AutoplayIgnoreWebAudio,MediaEngagementBypassAutoplayPolicies",
-				"disable-features":                    "InfiniteSessionRestore,TranslateUI,PreloadMediaEngagementData,AutoplayIgnoreWebAudio,MediaEngagementBypassAutoplayPolicies",
+				//				"enable-features":                     "PreloadMediaEngagementData,AutoplayIgnoreWebAudio,MediaEngagementBypassAutoplayPolicies",
+				"disable-features": "InfiniteSessionRestore,TranslateUI,PreloadMediaEngagementData,AutoplayIgnoreWebAudio,MediaEngagementBypassAutoplayPolicies",
 				//"no-first-run":                        true,
 				"enable-fullscreen-toolbar-reveal": false,
 				"useAutomationExtension":           false,

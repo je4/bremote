@@ -7,7 +7,7 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/goph/emperror"
 	"github.com/hashicorp/yamux"
-	"github.com/je4/bremote/common"
+	"github.com/je4/bremote/v2/common"
 	"github.com/mintance/go-uniqid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/connectivity"

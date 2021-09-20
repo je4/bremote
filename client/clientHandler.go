@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"github.com/chromedp/chromedp"
 	"github.com/golang/protobuf/ptypes/empty"
-	pb "github.com/je4/bremote/api"
-	"github.com/je4/bremote/browser"
-	"github.com/je4/bremote/common"
+	pb "github.com/je4/bremote/v2/api"
+	"github.com/je4/bremote/v2/browser"
+	"github.com/je4/bremote/v2/common"
 	"github.com/op/go-logging"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -129,7 +129,7 @@ func (css ClientServiceServer) Navigate(ctx context.Context, req *pb.NavigatePar
 
 	tasks := chromedp.Tasks{
 		chromedp.Navigate(req.GetUrl()),
-//		browser.MouseClickXYAction(2,2),
+		//		browser.MouseClickXYAction(2,2),
 	}
 	err = b.Tasks(tasks)
 	if err != nil {

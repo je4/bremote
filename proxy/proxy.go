@@ -5,12 +5,12 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"git.mills.io/prologic/bitcask"
 	"github.com/goph/emperror"
 	"github.com/hashicorp/yamux"
-	"github.com/je4/bremote/common"
-	"github.com/je4/ntp"
+	"github.com/je4/bremote/v2/common"
+	"github.com/je4/ntp/v2"
 	"github.com/op/go-logging"
-	"github.com/prologic/bitcask"
 	"github.com/soheilhy/cmux"
 	"io/ioutil"
 	"net"
@@ -131,7 +131,7 @@ func (proxy *Proxy) GetSessions(groups []string) map[string]*ProxySession {
 			for s2 := range groups {
 				if s1 == s2 {
 					result[name] = session
-					break;
+					break
 				}
 			}
 		}
@@ -352,8 +352,8 @@ func (proxy *Proxy) ServeSession(session *yamux.Session, groups []string, instan
 }
 
 func (proxy *Proxy) setVar(key string, value string) error {
-	proxy.db.Lock()
-	defer proxy.db.Unlock()
+	//	proxy.db.Lock()
+	//	defer proxy.db.Unlock()
 
 	if err := proxy.db.Put([]byte(key), []byte(value)); err != nil {
 		return emperror.Wrapf(err, "cannot write key %s", key)
@@ -363,8 +363,8 @@ func (proxy *Proxy) setVar(key string, value string) error {
 }
 
 func (proxy *Proxy) deleteVar(key string) error {
-	proxy.db.Lock()
-	defer proxy.db.Unlock()
+	//	proxy.db.Lock()
+	//	defer proxy.db.Unlock()
 
 	if err := proxy.db.Delete([]byte(key)); err != nil {
 		return emperror.Wrapf(err, "cannot delete key %s", key)
@@ -374,8 +374,8 @@ func (proxy *Proxy) deleteVar(key string) error {
 }
 
 func (proxy *Proxy) getVar(key string) (string, error) {
-	proxy.db.RLock()
-	defer proxy.db.Unlock()
+	//	proxy.db.RLock()
+	//	defer proxy.db.Unlock()
 	val, err := proxy.db.Get([]byte(key))
 	if err != nil {
 		return "", emperror.Wrapf(err, "no value found for key %v", key)
@@ -384,8 +384,8 @@ func (proxy *Proxy) getVar(key string) (string, error) {
 }
 
 func (proxy *Proxy) getKeys(prefix string) ([]string, error) {
-	proxy.db.RLock()
-	defer proxy.db.Unlock()
+	//	proxy.db.RLock()
+	//	defer proxy.db.Unlock()
 	keys := []string{}
 	err := proxy.db.Scan([]byte(prefix), func(key []byte) error {
 		keys = append(keys, string(key))

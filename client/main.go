@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"github.com/je4/bremote/common"
+	"github.com/je4/bremote/v2/common"
 	"log"
 	"os"
 	"os/signal"
@@ -30,8 +30,6 @@ func main() {
 	runtimeInterval := flag.Duration("runtimeinterval", 0, "interval for output of runtime information")
 
 	flag.Parse()
-
-
 
 	var doLocal = false
 	var exPath = ""
@@ -96,12 +94,10 @@ func main() {
 	log, lf := common.CreateLogger(config.InstanceName, config.Logfile, config.Loglevel)
 	defer lf.Close()
 
-	rtStat := common.NewRuntimeStats(config.RuntimeInterval.Duration, log )
+	rtStat := common.NewRuntimeStats(config.RuntimeInterval.Duration, log)
 	if config.RuntimeInterval.Duration > 0 {
 		go rtStat.Run()
 	}
-
-
 
 	client := NewClient(config, log)
 

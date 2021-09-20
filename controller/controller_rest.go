@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/gorilla/mux"
-	pb "github.com/je4/bremote/api"
-	"github.com/je4/bremote/common"
+	pb "github.com/je4/bremote/v2/api"
+	"github.com/je4/bremote/v2/common"
 	"github.com/mintance/go-uniqid"
 	"io"
 	"net"
@@ -621,7 +621,7 @@ func (controller *Controller) RestClientNavigate() func(w http.ResponseWriter, r
 			http.Error(w, fmt.Sprintf("cannot navigate to %v: %v", u.String(), err), http.StatusInternalServerError)
 			return
 		}
-		waittimeout,err := time.ParseDuration(data.Waittimeout)
+		waittimeout, err := time.ParseDuration(data.Waittimeout)
 		if err != nil {
 			controller.log.Errorf("invalid timeout format %v: %v", data.Waittimeout, err)
 			http.Error(w, fmt.Sprintf("invalid timeout format %v: %v", data.Waittimeout, err), http.StatusInternalServerError)

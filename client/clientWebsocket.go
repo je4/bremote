@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/gorilla/websocket"
-	pb "github.com/je4/bremote/api"
+	pb "github.com/je4/bremote/v2/api"
 	"github.com/mintance/go-uniqid"
 	"time"
 )

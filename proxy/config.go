@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/BurntSushi/toml"
-	"github.com/je4/bremote/common"
+	"github.com/je4/bremote/v2/common"
 	"log"
 )
 

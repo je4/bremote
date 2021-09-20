@@ -2,8 +2,8 @@ package main
 
 import (
 	"flag"
-	"github.com/je4/bremote/common"
-	"github.com/prologic/bitcask"
+	"git.mills.io/prologic/bitcask"
+	"github.com/je4/bremote/v2/common"
 	"log"
 	"os"
 	"os/signal"
@@ -48,12 +48,12 @@ func main() {
 	log, lf := common.CreateLogger(config.InstanceName, config.Logfile, config.Loglevel)
 	defer lf.Close()
 
-	rtStat := common.NewRuntimeStats(config.RuntimeInterval.Duration, log )
+	rtStat := common.NewRuntimeStats(config.RuntimeInterval.Duration, log)
 	if config.RuntimeInterval.Duration > 0 {
 		go rtStat.Run()
 	}
 
-	db, err := bitcask.Open(config.KVDBFile, bitcask.WithSync(true), bitcask.WithMaxValueSize(int(1 << 31)))
+	db, err := bitcask.Open(config.KVDBFile, bitcask.WithSync(true), bitcask.WithMaxValueSize(1<<31))
 	if err != nil {
 		log.Panicf("Error opening key value store \"%s\": %v", config.KVDBFile, err)
 	}

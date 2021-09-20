@@ -1,0 +1,26 @@
+logfile = "" # log file location
+loglevel = "DEBUG" # CRITICAL|ERROR|WARNING|NOTICE|INFO|DEBUG
+#instancename = "ba14nc21099" # instance name
+instancename = "" # instance name
+#proxy = "localhost:7777" # proxy addr:port
+proxy = "vpn-de2.info-age.net:80" # proxy addr:port
+httpproxy = "localhost:3128"
+runtimeinterval = "10s"
+
+certpem = "certs/info_age_mediathek_ba14nc21001.pem" # tls client certificate file in PEM format
+keypem = "certs/info_age_mediathek_ba14nc21001.key" # tls client key file in PEM format
+capem = "certs/info_age_mediathek_ca.pem" # tls root certificate file in PEM format
+httpscertpem = "certs/info_age_localhost.pem" # tls client certificate file in PEM format
+httpskeypem = "certs/info_age_localhost.key" # tls client key file in PEM format
+
+#certpem = "C:/daten/go/certs/bremote_client.pem" # tls client certificate file in PEM format
+#keypem = "C:/daten/go/certs/bremote_client.key" # tls client key file in PEM format
+#capem = "C:/daten/go/certs/bremote_ca.pem" # tls root certificate file in PEM format
+#httpscertpem = "C:/daten/go/certs/bremote_server.pem" # tls client certificate file in PEM format
+#httpskeypem = "C:/daten/go/certs/bremote_server.key" # tls client key file in PEM format
+
+
+httpstatic = "C:/daten/go/src/github.com/je4/bremote/client/data/static" # folder for static html files
+httpsaddr = "localhost:8443"
+httptemplates = "C:/daten/go/src/github.com/je4/bremote/client/data/templates" # folder for html templates
+

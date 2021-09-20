@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/je4/bremote/api"
-	"github.com/je4/bremote/common"
+	"github.com/je4/bremote/v2/api"
+	"github.com/je4/bremote/v2/common"
 	"github.com/mintance/go-uniqid"
 	"log"
 	"os"
@@ -122,8 +122,8 @@ func main() {
 					"kiosk":                               true,
 					"disable-session-crashed-bubble":      true,
 					"incognito":                           true,
-//					"enable-features":                     "PreloadMediaEngagementData,AutoplayIgnoreWebAudio,MediaEngagementBypassAutoplayPolicies",
-					"disable-features":                    "InfiniteSessionRestore,TranslateUI,PreloadMediaEngagementData,AutoplayIgnoreWebAudio,MediaEngagementBypassAutoplayPolicies",
+					//					"enable-features":                     "PreloadMediaEngagementData,AutoplayIgnoreWebAudio,MediaEngagementBypassAutoplayPolicies",
+					"disable-features": "InfiniteSessionRestore,TranslateUI,PreloadMediaEngagementData,AutoplayIgnoreWebAudio,MediaEngagementBypassAutoplayPolicies",
 					//"no-first-run":                        true,
 					"enable-fullscreen-toolbar-reveal": false,
 					"useAutomationExtension":           false,

@@ -4,4 +4,8 @@ client/.idea
 controller/.idea
 controller/init
 kv.bitcask
-certs
+*.key
+*.pem
+*.req
+*.srl
+go.sum

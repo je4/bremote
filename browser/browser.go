@@ -132,7 +132,7 @@ func fullScreenshot(quality int64, res *[]byte, logger *logging.Logger) chromedp
 	return chromedp.Tasks{
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			// get layout metrics
-			layoutViewport, visualViewport, contentSize, err := page.GetLayoutMetrics().Do(ctx)
+			layoutViewport, visualViewport, contentSize, _, _, _, err := page.GetLayoutMetrics().Do(ctx)
 			if err != nil {
 				return err
 			}
@@ -335,7 +335,7 @@ func MouseClickXYAction(x, y float64, opts ...chromedp.MouseOption) MouseAction 
 			Type:       input.MousePressed,
 			X:          x,
 			Y:          y,
-			Button:     input.ButtonLeft,
+			Button:     input.Left,
 			ClickCount: 1,
 		}
 
