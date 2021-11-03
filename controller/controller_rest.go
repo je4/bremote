@@ -586,10 +586,10 @@ type controllerClientNavigate struct {
 	Url         string `json:"url"`
 	Nextstatus  string `json:"nextstatus,omitempty"`
 	Waitfor     string `json:"waitfor,omitempty"`
-	Waittimeout string `json:waittimeout,omitempty`
-	PosX        int64  `json:posx,omitempty`
-	PosY        int64  `json:posy,omitempty`
-	Element     string `json:element,omitempty`
+	Waittimeout string `json:"waittimeout,omitempty"`
+	PosX        int64  `json:"posx,omitempty"`
+	PosY        int64  `json:"posy,omitempty"`
+	Element     string `json:"element,omitempty"`
 }
 
 func (controller *Controller) RestClientNavigate() func(w http.ResponseWriter, r *http.Request) {
@@ -620,6 +620,9 @@ func (controller *Controller) RestClientNavigate() func(w http.ResponseWriter, r
 			controller.log.Errorf("cannot navigate to %v: %v", u.String(), err)
 			http.Error(w, fmt.Sprintf("cannot navigate to %v: %v", u.String(), err), http.StatusInternalServerError)
 			return
+		}
+		if data.Waittimeout == "" {
+			data.Waittimeout = "0"
 		}
 		waittimeout, err := time.ParseDuration(data.Waittimeout)
 		if err != nil {
