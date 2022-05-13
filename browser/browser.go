@@ -99,7 +99,7 @@ func (browser *Browser) Startup() error {
 		case *page.EventFrameStartedLoading:
 		case *log.EventEntryAdded:
 		default:
-			browser.browserLog(fmt.Sprintf("Event of type %v happened", reflect.TypeOf(ev)))
+			browser.browserLog(reflect.TypeOf(ev).String(), ev)
 		}
 	})
 	return nil

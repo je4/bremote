@@ -16,11 +16,9 @@ require (
 	github.com/gorilla/websocket v1.4.2
 	github.com/hashicorp/yamux v0.0.0-20210826001029-26ff87cf9493
 	github.com/je4/grpc-proxy v0.0.0-20190725095843-862068e643c2
-	github.com/je4/ntp v0.2.0
 	github.com/je4/ntp/v2 v2.0.0-20210918073008-67fa4a5e10bc
 	github.com/mintance/go-uniqid v0.0.0-20180517195806-49cb885aad99
 	github.com/op/go-logging v0.0.0-20160315200505-970db520ece7
-	github.com/prologic/bitcask v0.3.10
 	github.com/rakyll/statik v0.1.7
 	github.com/sahmad98/go-ringbuffer v1.1.0
 	github.com/shirou/gopsutil v3.21.8+incompatible
